@@ -1,9 +1,9 @@
-﻿using ESAPI_IsodoseViewer.Helpers;
-using System;
+﻿using System;
 using System.IO;
 using System.Windows;
 using VMS.TPS.Common.Model.API;
 using VMS.TPS.Common.Model.Types;
+using ESAPI_IsodoseViewer.Core.Extensions;
 
 namespace ESAPI_IsodoseViewer.Services
 {

@@ -3,7 +3,8 @@ using System.Windows;
 using System.Windows.Media.Imaging;
 using VMS.TPS.Common.Model.API;
 using VMS.TPS.Common.Model.Types;
-using ESAPI_IsodoseViewer.Helpers;
+using ESAPI_IsodoseViewer.Core.Interfaces;
+using ESAPI_IsodoseViewer.Core.Extensions;
 
 namespace ESAPI_IsodoseViewer.Services
 {

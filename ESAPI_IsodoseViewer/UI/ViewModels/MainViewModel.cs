@@ -1,21 +1,25 @@
-﻿using System;
-using System.Windows;
-using System.Windows.Threading;
+﻿using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+using ESAPI_IsodoseViewer.Services;
+using System;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
-using ESAPI_IsodoseViewer.Mvvm;
-using ESAPI_IsodoseViewer.Services;
+using System.Windows.Threading;
 using VMS.TPS.Common.Model.API;
 using VMS.TPS.Common.Model.Types;
+using ESAPI_IsodoseViewer.Core.Interfaces;
 
-namespace ESAPI_IsodoseViewer.ViewModels
+namespace ESAPI_IsodoseViewer.UI.ViewModels
 {
-    public class MainViewModel : ObservableObject
+    public partial class MainViewModel : ObservableObject
     {
         private readonly ScriptContext _context;
         private readonly PlanSetup _plan;
         private readonly IImageRenderingService _renderingService;
         private readonly IDebugExportService _debugExportService;
+        private bool _renderPending = false;
+
+        #region Properties (Manual implementation for 100% stability)
 
         private WriteableBitmap _ctImageSource;
         public WriteableBitmap CtImageSource
@@ -37,7 +41,8 @@ namespace ESAPI_IsodoseViewer.ViewModels
             get => _currentSlice;
             set
             {
-                if (SetProperty(ref _currentSlice, value)) RequestRender();
+                if (SetProperty(ref _currentSlice, value))
+                    RequestRender();
             }
         }
 
@@ -54,7 +59,8 @@ namespace ESAPI_IsodoseViewer.ViewModels
             get => _windowLevel;
             set
             {
-                if (SetProperty(ref _windowLevel, value)) RequestRender();
+                if (SetProperty(ref _windowLevel, value))
+                    RequestRender();
             }
         }
 
@@ -64,7 +70,8 @@ namespace ESAPI_IsodoseViewer.ViewModels
             get => _windowWidth;
             set
             {
-                if (SetProperty(ref _windowWidth, value)) RequestRender();
+                if (SetProperty(ref _windowWidth, value))
+                    RequestRender();
             }
         }
 
@@ -75,17 +82,14 @@ namespace ESAPI_IsodoseViewer.ViewModels
             set => SetProperty(ref _statusText, value);
         }
 
-        public RelayCommand AutoPresetCommand { get; }
-        public RelayCommand PresetCommand { get; }
-        public RelayCommand DebugCommand { get; }
+        #endregion
 
-        public MainViewModel(ScriptContext context)
+        public MainViewModel(ScriptContext context, IImageRenderingService renderingService, IDebugExportService debugExportService)
         {
             _context = context;
             _plan = context.ExternalPlanSetup;
-
-            _renderingService = new ImageRenderingService();
-            _debugExportService = new DebugExportService();
+            _renderingService = renderingService;
+            _debugExportService = debugExportService;
 
             int width = _context.Image.XSize;
             int height = _context.Image.YSize;
@@ -94,34 +98,20 @@ namespace ESAPI_IsodoseViewer.ViewModels
             _currentSlice = _maxSlice / 2;
 
             _renderingService.Initialize(width, height);
-
-            // Preload all slices into memory to avoid fetching voxels on every slice change
             StatusText = "Loading image and dose data into memory...";
             _renderingService.PreloadData(_context.Image, _plan?.Dose);
 
             CtImageSource = new WriteableBitmap(width, height, 96, 96, PixelFormats.Bgra32, null);
             DoseImageSource = new WriteableBitmap(width, height, 96, 96, PixelFormats.Bgra32, null);
 
-            AutoPresetCommand = new RelayCommand(o => ExecuteAutoPreset());
-            PresetCommand = new RelayCommand(param => ExecutePreset((string)param));
-            DebugCommand = new RelayCommand(o => ExecuteDebug());
-
-            ExecuteAutoPreset();
+            AutoPreset();
         }
-
-        // --- STATE OF THE ART RENDER COALESCING ---
-        private bool _renderPending = false;
 
         private void RequestRender()
         {
-            // If a render is already queued, ignore further requests until it completes.
-            // This prevents ESAPI UI thread from freezing during rapid mouse movements.
             if (_renderPending) return;
             _renderPending = true;
 
-            // DispatcherPriority.Render ensures this only runs AFTER all immediate data bindings 
-            // and UI property updates have finished processing.
-            // Explicitly use System.Windows.Application to avoid ambiguous reference with VMS.TPS.Common.Model.API.Application
             System.Windows.Application.Current.Dispatcher.BeginInvoke(new Action(() =>
             {
                 _renderPending = false;
@@ -133,7 +123,7 @@ namespace ESAPI_IsodoseViewer.ViewModels
         {
             if (_context.Image == null) return;
 
-            _renderingService.RenderCtImage(_context.Image, CtImageSource, _currentSlice, _windowLevel, _windowWidth);
+            _renderingService.RenderCtImage(_context.Image, CtImageSource, CurrentSlice, WindowLevel, WindowWidth);
 
             double planTotalDose = _plan?.TotalDose.Unit == DoseValue.DoseUnit.cGy
                 ? _plan.TotalDose.Dose / 100.0
@@ -145,19 +135,20 @@ namespace ESAPI_IsodoseViewer.ViewModels
                 _context.Image,
                 _plan?.Dose,
                 DoseImageSource,
-                _currentSlice,
+                CurrentSlice,
                 planTotalDose,
                 planNormalization);
         }
 
-        private void ExecuteAutoPreset()
+        [RelayCommand]
+        private void AutoPreset()
         {
-            // Using public properties triggers RequestRender() automatically
             WindowLevel = 40;
             WindowWidth = 400;
         }
 
-        private void ExecutePreset(string type)
+        [RelayCommand]
+        private void Preset(string type)
         {
             switch (type)
             {
@@ -167,9 +158,10 @@ namespace ESAPI_IsodoseViewer.ViewModels
             }
         }
 
-        private void ExecuteDebug()
+        [RelayCommand]
+        private void Debug()
         {
-            _debugExportService.ExportDebugLog(_context, _plan, _currentSlice);
+            _debugExportService.ExportDebugLog(_context, _plan, CurrentSlice);
         }
     }
 }

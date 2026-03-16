@@ -1,10 +1,10 @@
-﻿<Window x:Class="ESAPI_IsodoseViewer.ViewerWindow"
+﻿<Window x:Class="ESAPI_IsodoseViewer.UI.Views.ViewerWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        xmlns:vm="clr-namespace:ESAPI_IsodoseViewer.ViewModels"
-        xmlns:controls="clr-namespace:ESAPI_IsodoseViewer.Controls"
+        xmlns:vm="clr-namespace:ESAPI_IsodoseViewer.UI.ViewModels"
+        xmlns:controls="clr-namespace:ESAPI_IsodoseViewer.UI.Controls"
         mc:Ignorable="d"
         d:DataContext="{d:DesignInstance Type=vm:MainViewModel, IsDesignTimeCreatable=False}"
         Title="ESAPI Isodose Viewer" Height="900" Width="1100" Background="#111">
@@ -40,12 +40,12 @@
 
             <TextBlock Text="PRESETS" Foreground="Gold" FontWeight="Bold" Margin="0,20,0,10" HorizontalAlignment="Center"/>
             
-            <Button Content="Soft Tissue" Command="{Binding PresetCommand}" CommandParameter="Soft" Margin="0,2"/>
-            <Button Content="Lung" Command="{Binding PresetCommand}" CommandParameter="Lung" Margin="0,2"/>
-            <Button Content="Bone" Command="{Binding PresetCommand}" CommandParameter="Bone" Margin="0,2"/>
+            <Button Content="Soft Tissue" Command="{Binding ExecutePresetCommand}" CommandParameter="Soft" Margin="0,2"/>
+            <Button Content="Lung" Command="{Binding ExecutePresetCommand}" CommandParameter="Lung" Margin="0,2"/>
+            <Button Content="Bone" Command="{Binding ExecutePresetCommand}" CommandParameter="Bone" Margin="0,2"/>
             
-            <Button Content="AUTO" Command="{Binding AutoPresetCommand}" Margin="0,10" Background="DarkGreen" Foreground="White"/>
-            <Button Content="EXPORT DEBUG INFO" Command="{Binding DebugCommand}" Margin="0,20" Background="DarkRed" Foreground="White"/>
+            <Button Content="AUTO" Command="{Binding ExecuteAutoPresetCommand}" Margin="0,10" Background="DarkGreen" Foreground="White"/>
+            <Button Content="EXPORT DEBUG INFO" Command="{Binding ExecuteDebugCommand}" Margin="0,20" Background="DarkRed" Foreground="White"/>
         </StackPanel>
 
         <StackPanel Grid.Row="1" Grid.ColumnSpan="2" Orientation="Horizontal" Margin="10" Background="#333">

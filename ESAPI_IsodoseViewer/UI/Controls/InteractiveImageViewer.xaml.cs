@@ -4,7 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 
-namespace ESAPI_IsodoseViewer.Controls
+namespace ESAPI_IsodoseViewer.UI.Controls
 {
     public partial class InteractiveImageViewer : UserControl
     {
@@ -83,7 +83,7 @@ namespace ESAPI_IsodoseViewer.Controls
         public InteractiveImageViewer()
         {
             InitializeComponent();
-            // Poistettu vaarallinen LostMouseCapture-tilaus, joka aiheutti ikuisen silmukan
+            // Removed dangerous LostMouseCapture subscription that caused an infinite loop
         }
 
         private void OnPreviewMouseWheel(object sender, MouseWheelEventArgs e)
@@ -113,8 +113,6 @@ namespace ESAPI_IsodoseViewer.Controls
 
         private void OnPreviewMouseDown(object sender, MouseButtonEventArgs e)
         {
-            // Poistettu vaarallinen this.Focus(), jota ESAPI ei salli UserControlille
-
             if (e.MiddleButton == MouseButtonState.Pressed)
             {
                 _isPanning = true;
@@ -161,7 +159,7 @@ namespace ESAPI_IsodoseViewer.Controls
             }
             else
             {
-                // Jos hiiren painike on ylhäällä, mutta liike rekisteröidään, nollataan tila
+                // If the mouse button is up, but movement is registered, reset the state
                 _isPanning = false;
                 _isWindowing = false;
             }
