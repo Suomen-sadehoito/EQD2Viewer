@@ -8,25 +8,62 @@
         xmlns:oxy="http://oxyplot.org/wpf"
         mc:Ignorable="d"
         d:DataContext="{d:DesignInstance Type=vm:MainViewModel, IsDesignTimeCreatable=False}"
-        Title="ESAPI EQD2 Viewer" Height="950" Width="1300" Background="#111"
+        Title="ESAPI EQD2 Viewer" Height="1000" Width="1400" Background="#111"
         WindowStartupLocation="CenterScreen">
 
+    <Window.Resources>
+        <!-- Shared styles for section headers -->
+        <Style x:Key="SectionHeader" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#FFD700"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="HorizontalAlignment" Value="Center"/>
+            <Setter Property="Margin" Value="0,0,0,8"/>
+        </Style>
+        
+        <!-- Dark panel border -->
+        <Style x:Key="PanelBorder" TargetType="Border">
+            <Setter Property="BorderBrush" Value="#444"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="4"/>
+            <Setter Property="Padding" Value="10"/>
+            <Setter Property="Margin" Value="0,4"/>
+            <Setter Property="Background" Value="#1a1a1a"/>
+        </Style>
+
+        <!-- Small button -->
+        <Style x:Key="SmallButton" TargetType="Button">
+            <Setter Property="Padding" Value="8,4"/>
+            <Setter Property="Margin" Value="2"/>
+            <Setter Property="Background" Value="#333"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderBrush" Value="#555"/>
+            <Setter Property="BorderThickness" Value="1"/>
+        </Style>
+
+        <!-- Accent button -->
+        <Style x:Key="AccentButton" TargetType="Button" BasedOn="{StaticResource SmallButton}">
+            <Setter Property="Background" Value="#2d5a2d"/>
+            <Setter Property="BorderBrush" Value="#3a7a3a"/>
+        </Style>
+    </Window.Resources>
+    
     <Grid>
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="*"/>
-            <ColumnDefinition Width="270"/>
+            <ColumnDefinition Width="310"/>
         </Grid.ColumnDefinitions>
         <Grid.RowDefinitions>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <!-- ===== MAIN CONTENT AREA (Left) ===== -->
+        <!-- ===== MAIN CONTENT (Left) ===== -->
         <Grid Grid.Column="0">
             <Grid.RowDefinitions>
-                <RowDefinition Height="3*" MinHeight="200"/>
+                <RowDefinition Height="3*" MinHeight="250"/>
                 <RowDefinition Height="5"/>
-                <RowDefinition Height="2*" MinHeight="150"/>
+                <RowDefinition Height="2*" MinHeight="200"/>
             </Grid.RowDefinitions>
 
             <!-- Isodose Viewer -->
@@ -39,40 +76,44 @@
                 WindowLevel="{Binding WindowLevel, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                 WindowWidth="{Binding WindowWidth, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
 
-            <!-- Splitter -->
             <GridSplitter Grid.Row="1" Height="5" HorizontalAlignment="Stretch" Background="#333"/>
 
-            <!-- DVH + Summary Area -->
+            <!-- DVH + Summary -->
             <TabControl Grid.Row="2" Margin="5" Background="#1a1a1a" Foreground="White"
                         BorderBrush="#333" BorderThickness="1">
                 
-                <!-- DVH Tab -->
-                <TabItem Header="DVH Chart" Background="#222" Foreground="White">
+                <!-- DVH Chart -->
+                <TabItem Header="  DVH Chart  " Background="#222" Foreground="White">
                     <oxy:PlotView Model="{Binding PlotModel}" Background="#1a1a1a" Margin="2"/>
                 </TabItem>
 
-                <!-- Summary Table Tab -->
-                <TabItem Header="Summary" Background="#222" Foreground="White">
+                <!-- Summary Table -->
+                <TabItem Header="  Summary  " Background="#222" Foreground="White">
                     <DataGrid AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False"
-                              ItemsSource="{Binding SummaryData}" Background="#1a1a1a"
-                              Foreground="White" RowBackground="#1a1a1a" AlternatingRowBackground="#222"
-                              GridLinesVisibility="Horizontal" HorizontalGridLinesBrush="#333"
-                              BorderBrush="#333" HeadersVisibility="Column">
+                              ItemsSource="{Binding SummaryData}"
+                              Background="#fafafa" Foreground="#222"
+                              RowBackground="White" AlternatingRowBackground="#f0f4f8"
+                              GridLinesVisibility="Horizontal" HorizontalGridLinesBrush="#ddd"
+                              BorderBrush="#bbb" HeadersVisibility="Column"
+                              FontSize="12">
                         <DataGrid.ColumnHeaderStyle>
                             <Style TargetType="DataGridColumnHeader">
-                                <Setter Property="Background" Value="#333"/>
-                                <Setter Property="Foreground" Value="White"/>
-                                <Setter Property="Padding" Value="6,4"/>
+                                <Setter Property="Background" Value="#e0e4e8"/>
+                                <Setter Property="Foreground" Value="#222"/>
+                                <Setter Property="Padding" Value="8,5"/>
+                                <Setter Property="FontWeight" Value="SemiBold"/>
+                                <Setter Property="BorderBrush" Value="#ccc"/>
+                                <Setter Property="BorderThickness" Value="0,0,1,1"/>
                             </Style>
                         </DataGrid.ColumnHeaderStyle>
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="Structure" Width="*" Binding="{Binding StructureId}"/>
-                            <DataGridTextColumn Header="Plan" Width="Auto" Binding="{Binding PlanId}"/>
-                            <DataGridTextColumn Header="Type" Width="Auto" Binding="{Binding Type}"/>
-                            <DataGridTextColumn Header="Dmax (Gy)" Width="Auto" Binding="{Binding DMax, StringFormat=F2}"/>
-                            <DataGridTextColumn Header="Dmean (Gy)" Width="Auto" Binding="{Binding DMean, StringFormat=F2}"/>
-                            <DataGridTextColumn Header="Dmin (Gy)" Width="Auto" Binding="{Binding DMin, StringFormat=F2}"/>
-                            <DataGridTextColumn Header="Vol (cm³)" Width="Auto" Binding="{Binding Volume, StringFormat=F2}"/>
+                            <DataGridTextColumn Header="Plan" Width="70" Binding="{Binding PlanId}"/>
+                            <DataGridTextColumn Header="Type" Width="65" Binding="{Binding Type}"/>
+                            <DataGridTextColumn Header="Dmax (Gy)" Width="80" Binding="{Binding DMax, StringFormat=F2}"/>
+                            <DataGridTextColumn Header="Dmean (Gy)" Width="85" Binding="{Binding DMean, StringFormat=F2}"/>
+                            <DataGridTextColumn Header="Dmin (Gy)" Width="80" Binding="{Binding DMin, StringFormat=F2}"/>
+                            <DataGridTextColumn Header="Vol (cm³)" Width="80" Binding="{Binding Volume, StringFormat=F2}"/>
                         </DataGrid.Columns>
                     </DataGrid>
                 </TabItem>
@@ -80,137 +121,288 @@
         </Grid>
 
         <!-- ===== SIDE PANEL (Right) ===== -->
-        <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto">
-            <StackPanel Margin="8" Background="#222">
+        <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto" Margin="0,5,5,0">
+            <StackPanel>
 
-                <!-- EQD2 Settings -->
-                <Border BorderBrush="#555" BorderThickness="1" CornerRadius="4" Padding="8" Margin="0,5">
+                <!-- ============================================ -->
+                <!-- DOSE DISPLAY MODE (Eclipse-style selection) -->
+                <!-- ============================================ -->
+                <Border Style="{StaticResource PanelBorder}">
                     <StackPanel>
-                        <TextBlock Text="EQD2 CONVERSION" Foreground="#FFD700" FontWeight="Bold"
-                                   HorizontalAlignment="Center" Margin="0,0,0,8"/>
+                        <TextBlock Text="DOSE DISPLAY" Style="{StaticResource SectionHeader}"/>
+                        
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,6">
+                            <RadioButton Content=" Line" IsChecked="{Binding IsLineMode}"
+                                         Foreground="White" Margin="0,0,12,0" GroupName="DisplayMode"
+                                         ToolTip="Eclipse default: contour lines at dose thresholds"/>
+                            <RadioButton Content=" Fill" IsChecked="{Binding IsFillMode}"
+                                         Foreground="White" Margin="0,0,12,0" GroupName="DisplayMode"
+                                         ToolTip="Solid color fill between isodose levels"/>
+                            <RadioButton Content=" Colorwash" IsChecked="{Binding IsColorwashMode}"
+                                         Foreground="White" GroupName="DisplayMode"
+                                         ToolTip="Continuous jet colormap gradient"/>
+                        </StackPanel>
+
+                        <!-- Colorwash-specific settings -->
+                        <StackPanel Margin="0,4,0,0"
+                                    Visibility="{Binding IsColorwashMode, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Text="{Binding ColorwashOpacity, StringFormat='Opacity: {0:P0}'}"
+                                       Foreground="#aaa" FontSize="11" Margin="0,2,0,0"/>
+                            <Slider Minimum="0.1" Maximum="1.0" Value="{Binding ColorwashOpacity}"
+                                    TickFrequency="0.05" IsSnapToTickEnabled="True" Margin="0,2"/>
+                            
+                            <TextBlock Text="{Binding ColorwashMinPercent, StringFormat='Min threshold: {0:P0}'}"
+                                       Foreground="#aaa" FontSize="11" Margin="0,4,0,0"/>
+                            <Slider Minimum="0.0" Maximum="0.50" Value="{Binding ColorwashMinPercent}"
+                                    TickFrequency="0.05" IsSnapToTickEnabled="True" Margin="0,2"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- ============================================ -->
+                <!-- ISODOSE LEVELS (editable, Eclipse-like)     -->
+                <!-- ============================================ -->
+                <Border Style="{StaticResource PanelBorder}">
+                    <StackPanel>
+                        <TextBlock Text="ISODOSE LEVELS" Style="{StaticResource SectionHeader}"/>
+
+                        <!-- Preset buttons -->
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,6">
+                            <Button Content="Eclipse (10)" Style="{StaticResource SmallButton}" FontSize="10"
+                                    Command="{Binding LoadIsodosePresetCommand}" CommandParameter="Eclipse"/>
+                            <Button Content="Default (4)" Style="{StaticResource SmallButton}" FontSize="10"
+                                    Command="{Binding LoadIsodosePresetCommand}" CommandParameter="Default"/>
+                            <Button Content="Minimal (3)" Style="{StaticResource SmallButton}" FontSize="10"
+                                    Command="{Binding LoadIsodosePresetCommand}" CommandParameter="Minimal"/>
+                        </StackPanel>
+
+                        <!-- Editable isodose table -->
+                        <DataGrid AutoGenerateColumns="False" CanUserAddRows="False" CanUserDeleteRows="False"
+                                  MaxHeight="280" HeadersVisibility="Column"
+                                  GridLinesVisibility="Horizontal"
+                                  ItemsSource="{Binding IsodoseLevels}"
+                                  Background="#111" Foreground="White"
+                                  RowBackground="#1a1a1a" AlternatingRowBackground="#222"
+                                  HorizontalGridLinesBrush="#333" BorderBrush="#444"
+                                  FontSize="11" SelectionUnit="FullRow"
+                                  x:Name="IsodoseLevelGrid">
+                            <DataGrid.ColumnHeaderStyle>
+                                <Style TargetType="DataGridColumnHeader">
+                                    <Setter Property="Background" Value="#2a2a2a"/>
+                                    <Setter Property="Foreground" Value="#ccc"/>
+                                    <Setter Property="Padding" Value="6,3"/>
+                                    <Setter Property="FontSize" Value="10"/>
+                                </Style>
+                            </DataGrid.ColumnHeaderStyle>
+                            <DataGrid.Columns>
+                                <DataGridCheckBoxColumn Header="On" Width="32"
+                                    Binding="{Binding IsVisible, UpdateSourceTrigger=PropertyChanged}"/>
+                                <DataGridTemplateColumn Header="Color" Width="40">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <Rectangle Width="24" Height="14" RadiusX="2" RadiusY="2"
+                                                       Stroke="#666" StrokeThickness="0.5">
+                                                <Rectangle.Fill>
+                                                    <SolidColorBrush Color="{Binding MediaColor}"/>
+                                                </Rectangle.Fill>
+                                            </Rectangle>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                                <DataGridTextColumn Header="Level %" Width="60"
+                                    Binding="{Binding Fraction, StringFormat=P0, UpdateSourceTrigger=LostFocus}">
+                                    <DataGridTextColumn.ElementStyle>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Foreground" Value="White"/>
+                                            <Setter Property="VerticalAlignment" Value="Center"/>
+                                        </Style>
+                                    </DataGridTextColumn.ElementStyle>
+                                    <DataGridTextColumn.EditingElementStyle>
+                                        <Style TargetType="TextBox">
+                                            <Setter Property="Background" Value="#333"/>
+                                            <Setter Property="Foreground" Value="White"/>
+                                        </Style>
+                                    </DataGridTextColumn.EditingElementStyle>
+                                </DataGridTextColumn>
+                                <DataGridTextColumn Header="Label" Width="*"
+                                    Binding="{Binding Label, UpdateSourceTrigger=LostFocus}">
+                                    <DataGridTextColumn.ElementStyle>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Foreground" Value="White"/>
+                                        </Style>
+                                    </DataGridTextColumn.ElementStyle>
+                                    <DataGridTextColumn.EditingElementStyle>
+                                        <Style TargetType="TextBox">
+                                            <Setter Property="Background" Value="#333"/>
+                                            <Setter Property="Foreground" Value="White"/>
+                                        </Style>
+                                    </DataGridTextColumn.EditingElementStyle>
+                                </DataGridTextColumn>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                        
+                        <!-- Add / Show All / Hide All -->
+                        <StackPanel Orientation="Horizontal" Margin="0,6,0,0" HorizontalAlignment="Center">
+                            <Button Content="+ Add" Style="{StaticResource SmallButton}" FontSize="10"
+                                    Command="{Binding AddIsodoseLevelCommand}"/>
+                            <Button Content="All On" Style="{StaticResource SmallButton}" FontSize="10"
+                                    Command="{Binding ToggleAllIsodoseCommand}" CommandParameter="True"/>
+                            <Button Content="All Off" Style="{StaticResource SmallButton}" FontSize="10"
+                                    Command="{Binding ToggleAllIsodoseCommand}" CommandParameter="False"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- ============================================ -->
+                <!-- EQD2 SETTINGS                               -->
+                <!-- ============================================ -->
+                <Border Style="{StaticResource PanelBorder}">
+                    <StackPanel>
+                        <TextBlock Text="EQD2 CONVERSION" Style="{StaticResource SectionHeader}"/>
 
                         <CheckBox Content=" Enable EQD2 isodose" IsChecked="{Binding IsEQD2Enabled}"
-                                  Foreground="White" Margin="0,4"/>
+                                  Foreground="White" Margin="0,2"/>
 
                         <TextBlock Text="{Binding NumberOfFractions, StringFormat='Fractions: {0}'}"
-                                   Foreground="White" Margin="0,8,0,0"/>
+                                   Foreground="#bbb" FontSize="11" Margin="0,8,0,0"/>
                         <Slider Minimum="1" Maximum="50" Value="{Binding NumberOfFractions}"
                                 IsSnapToTickEnabled="True" TickFrequency="1" Margin="0,2"/>
 
                         <TextBlock Text="{Binding GlobalAlphaBeta, StringFormat='Isodose α/β: {0:F1} Gy'}"
-                                   Foreground="White" Margin="0,8,0,0"/>
+                                   Foreground="#bbb" FontSize="11" Margin="0,6,0,0"/>
                         <Slider Minimum="0.5" Maximum="20" Value="{Binding GlobalAlphaBeta}"
                                 TickFrequency="0.5" IsSnapToTickEnabled="True" Margin="0,2"/>
 
-                        <CheckBox Content=" Differential Dmean" IsChecked="{Binding UseDifferentialMethod}"
-                                  Foreground="White" Margin="0,8,0,0" ToolTip="More accurate for heterogeneous dose distributions"/>
+                        <CheckBox Content=" Differential Dmean (more accurate)"
+                                  IsChecked="{Binding UseDifferentialMethod}"
+                                  Foreground="White" Margin="0,8,0,0"
+                                  ToolTip="Uses weighted average from differential DVH bins.&#x0a;More accurate for heterogeneous dose distributions."/>
                     </StackPanel>
                 </Border>
 
-                <!-- Structure α/β Settings -->
-                <Border BorderBrush="#555" BorderThickness="1" CornerRadius="4" Padding="8" Margin="0,5">
+                <!-- ============================================ -->
+                <!-- STRUCTURE α/β + DVH                          -->
+                <!-- ============================================ -->
+                <Border Style="{StaticResource PanelBorder}">
                     <StackPanel>
-                        <TextBlock Text="STRUCTURE α/β" Foreground="#FFD700" FontWeight="Bold"
-                                   HorizontalAlignment="Center" Margin="0,0,0,8"/>
+                        <TextBlock Text="STRUCTURE DVH" Style="{StaticResource SectionHeader}"/>
 
                         <Button Content="Select Structures..." Click="SelectStructures_Click"
-                                Margin="0,0,0,8" Padding="4"/>
+                                Style="{StaticResource AccentButton}" Margin="0,0,0,6"/>
 
                         <DataGrid AutoGenerateColumns="False" CanUserAddRows="False"
-                                  MaxHeight="200" HeadersVisibility="Column"
+                                  MaxHeight="180" HeadersVisibility="Column"
                                   GridLinesVisibility="Horizontal"
                                   ItemsSource="{Binding StructureSettings}"
-                                  Background="#1a1a1a" Foreground="White"
+                                  Background="#111" Foreground="White"
                                   RowBackground="#1a1a1a" AlternatingRowBackground="#222"
-                                  HorizontalGridLinesBrush="#333" BorderBrush="#333">
+                                  HorizontalGridLinesBrush="#333" BorderBrush="#444"
+                                  FontSize="11">
                             <DataGrid.ColumnHeaderStyle>
                                 <Style TargetType="DataGridColumnHeader">
-                                    <Setter Property="Background" Value="#333"/>
-                                    <Setter Property="Foreground" Value="White"/>
-                                    <Setter Property="Padding" Value="4,2"/>
+                                    <Setter Property="Background" Value="#2a2a2a"/>
+                                    <Setter Property="Foreground" Value="#ccc"/>
+                                    <Setter Property="Padding" Value="6,3"/>
+                                    <Setter Property="FontSize" Value="10"/>
                                 </Style>
                             </DataGrid.ColumnHeaderStyle>
                             <DataGrid.Columns>
                                 <DataGridTextColumn Header="Structure" IsReadOnly="True" Width="*"
                                                     Binding="{Binding Id}"/>
+                                <DataGridTextColumn Header="Type" IsReadOnly="True" Width="50"
+                                                    Binding="{Binding DicomType}"/>
                                 <DataGridTextColumn Header="α/β" Width="50"
-                                                    Binding="{Binding AlphaBeta, UpdateSourceTrigger=PropertyChanged}"/>
+                                                    Binding="{Binding AlphaBeta, UpdateSourceTrigger=PropertyChanged}">
+                                    <DataGridTextColumn.EditingElementStyle>
+                                        <Style TargetType="TextBox">
+                                            <Setter Property="Background" Value="#333"/>
+                                            <Setter Property="Foreground" Value="White"/>
+                                        </Style>
+                                    </DataGridTextColumn.EditingElementStyle>
+                                </DataGridTextColumn>
                             </DataGrid.Columns>
                         </DataGrid>
 
                         <Button Content="Calculate EQD2 DVH" Command="{Binding CalculateEQD2Command}"
-                                Margin="0,8,0,0" Padding="4" Background="#2d5a2d" Foreground="White"/>
+                                Style="{StaticResource AccentButton}" Margin="0,6,0,0"/>
+
+                        <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                            <CheckBox Content=" Physical" IsChecked="{Binding ShowPhysicalDVH}"
+                                      Foreground="White" Margin="0,0,16,0"/>
+                            <CheckBox Content=" EQD2" IsChecked="{Binding ShowEQD2DVH}"
+                                      Foreground="White"/>
+                        </StackPanel>
                     </StackPanel>
                 </Border>
 
-                <!-- DVH Display -->
-                <Border BorderBrush="#555" BorderThickness="1" CornerRadius="4" Padding="8" Margin="0,5">
+                <!-- ============================================ -->
+                <!-- WINDOWING                                    -->
+                <!-- ============================================ -->
+                <Border Style="{StaticResource PanelBorder}">
                     <StackPanel>
-                        <TextBlock Text="DVH DISPLAY" Foreground="#FFD700" FontWeight="Bold"
-                                   HorizontalAlignment="Center" Margin="0,0,0,8"/>
-                        <CheckBox Content=" Show physical DVH" IsChecked="{Binding ShowPhysicalDVH}"
-                                  Foreground="White" Margin="0,2"/>
-                        <CheckBox Content=" Show EQD2 DVH" IsChecked="{Binding ShowEQD2DVH}"
-                                  Foreground="White" Margin="0,2"/>
-                    </StackPanel>
-                </Border>
+                        <TextBlock Text="WINDOWING" Style="{StaticResource SectionHeader}"/>
 
-                <!-- Windowing -->
-                <Border BorderBrush="#555" BorderThickness="1" CornerRadius="4" Padding="8" Margin="0,5">
-                    <StackPanel>
-                        <TextBlock Text="WINDOWING" Foreground="#FFD700" FontWeight="Bold"
-                                   HorizontalAlignment="Center" Margin="0,0,0,8"/>
-
-                        <TextBlock Text="{Binding WindowLevel, StringFormat='Level: {0:F0}'}" Foreground="White"/>
+                        <TextBlock Text="{Binding WindowLevel, StringFormat='Level: {0:F0}'}"
+                                   Foreground="#bbb" FontSize="11"/>
                         <Slider Minimum="-1000" Maximum="1000" Value="{Binding WindowLevel}" Margin="0,2"/>
 
-                        <TextBlock Text="{Binding WindowWidth, StringFormat='Width: {0:F0}'}" Foreground="White" Margin="0,6,0,0"/>
+                        <TextBlock Text="{Binding WindowWidth, StringFormat='Width: {0:F0}'}"
+                                   Foreground="#bbb" FontSize="11" Margin="0,4,0,0"/>
                         <Slider Minimum="1" Maximum="3000" Value="{Binding WindowWidth}" Margin="0,2"/>
 
-                        <TextBlock Text="PRESETS" Foreground="Gray" HorizontalAlignment="Center" Margin="0,8,0,4"/>
-                        <Button Content="Soft Tissue" Command="{Binding PresetCommand}" CommandParameter="Soft" Margin="0,2" Padding="4"/>
-                        <Button Content="Lung" Command="{Binding PresetCommand}" CommandParameter="Lung" Margin="0,2" Padding="4"/>
-                        <Button Content="Bone" Command="{Binding PresetCommand}" CommandParameter="Bone" Margin="0,2" Padding="4"/>
-                        <Button Content="AUTO" Command="{Binding AutoPresetCommand}" Margin="0,4" Padding="4"
-                                Background="DarkGreen" Foreground="White"/>
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,6,0,0">
+                            <Button Content="Soft" Style="{StaticResource SmallButton}"
+                                    Command="{Binding PresetCommand}" CommandParameter="Soft"/>
+                            <Button Content="Lung" Style="{StaticResource SmallButton}"
+                                    Command="{Binding PresetCommand}" CommandParameter="Lung"/>
+                            <Button Content="Bone" Style="{StaticResource SmallButton}"
+                                    Command="{Binding PresetCommand}" CommandParameter="Bone"/>
+                            <Button Content="AUTO" Style="{StaticResource SmallButton}"
+                                    Command="{Binding AutoPresetCommand}"
+                                    Background="DarkGreen" BorderBrush="#3a8a3a"/>
+                        </StackPanel>
                     </StackPanel>
                 </Border>
 
-                <!-- Isodose Legend -->
-                <Border BorderBrush="#555" BorderThickness="1" CornerRadius="4" Padding="8" Margin="0,5">
-                    <StackPanel>
-                        <TextBlock Text="ISODOSE LEVELS" Foreground="#FFD700" FontWeight="Bold"
-                                   HorizontalAlignment="Center" Margin="0,0,0,8"/>
-
-                        <ItemsControl ItemsSource="{Binding IsodoseLevels}" x:Name="IsodoseLegend">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <StackPanel Orientation="Horizontal" Margin="0,2">
-                                        <Rectangle Width="16" Height="16" Margin="0,0,8,0"/>
-                                        <TextBlock Text="{Binding Label}" Foreground="White" VerticalAlignment="Center"/>
-                                    </StackPanel>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                    </StackPanel>
-                </Border>
-
-                <!-- Export and Debug -->
-                <Button Content="Export CSV" Command="{Binding ExportCSVCommand}" Margin="0,10,0,2"
-                        Padding="4" Background="#2d4a6d" Foreground="White"/>
-                <Button Content="Export Debug" Command="{Binding DebugCommand}" Margin="0,2"
-                        Padding="4" Background="DarkRed" Foreground="White"/>
+                <!-- ============================================ -->
+                <!-- EXPORT                                       -->
+                <!-- ============================================ -->
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,8,0,8">
+                    <Button Content="Export CSV" Style="{StaticResource SmallButton}"
+                            Command="{Binding ExportCSVCommand}" Background="#2d4a6d" BorderBrush="#3a6a9d"/>
+                    <Button Content="Debug Log" Style="{StaticResource SmallButton}"
+                            Command="{Binding DebugCommand}" Background="#6d2d2d" BorderBrush="#9d3a3a"/>
+                </StackPanel>
 
             </StackPanel>
         </ScrollViewer>
 
         <!-- ===== BOTTOM BAR ===== -->
-        <StackPanel Grid.Row="1" Grid.ColumnSpan="2" Orientation="Horizontal" Margin="5" Background="#222">
-            <TextBlock Text="Slice (Z):" Foreground="White" VerticalAlignment="Center" Margin="10,0"/>
-            <Slider Width="700" Margin="10,0"
-                    Minimum="0" Maximum="{Binding MaxSlice}" Value="{Binding CurrentSlice}"
-                    IsSnapToTickEnabled="True" TickFrequency="1"/>
-            <TextBlock Text="{Binding StatusText}" Foreground="White" VerticalAlignment="Center" Margin="10,0"/>
-        </StackPanel>
+        <Border Grid.Row="1" Grid.ColumnSpan="2" Background="#1a1a1a" BorderBrush="#333"
+                BorderThickness="0,1,0,0" Padding="10,6">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                
+                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="Slice:" Foreground="#aaa" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                    <TextBlock Text="{Binding CurrentSlice}" Foreground="White" FontWeight="SemiBold"
+                               VerticalAlignment="Center" Margin="0,0,6,0" MinWidth="30"/>
+                    <TextBlock Text="{Binding MaxSlice, StringFormat='/ {0}'}" Foreground="#666"
+                               VerticalAlignment="Center" Margin="0,0,15,0"/>
+                </StackPanel>
+                
+                <Slider Grid.Column="1" Margin="5,0"
+                        Minimum="0" Maximum="{Binding MaxSlice}" Value="{Binding CurrentSlice}"
+                        IsSnapToTickEnabled="True" TickFrequency="1" VerticalAlignment="Center"/>
+                
+                <TextBlock Grid.Column="2" Text="{Binding StatusText}" Foreground="#aaa"
+                           VerticalAlignment="Center" Margin="10,0,0,0" FontSize="11"
+                           TextTrimming="CharacterEllipsis" MaxWidth="500"/>
+            </Grid>
+        </Border>
     </Grid>
 </Window>

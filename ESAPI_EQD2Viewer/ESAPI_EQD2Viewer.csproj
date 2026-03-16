@@ -90,6 +90,7 @@
     <Compile Include="Core\Interfaces\IDebugExportService.cs" />
     <Compile Include="Core\Interfaces\IImageRenderingService.cs" />
     <Compile Include="Core\Models\CalculationSettings.cs" />
+    <Compile Include="Core\Models\DoseDisplayMode.cs" />
     <Compile Include="Core\Models\DVHSummary.cs" />
     <Compile Include="Core\Models\EQD2Settings.cs" />
     <Compile Include="Core\Models\IsodoseLevel.cs" />
@@ -143,7 +144,7 @@
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
     <PackageReference Include="Costura.Fody">
-      <Version>6.0.0</Version> 
+      <Version>6.0.0</Version>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
     <PackageReference Include="OxyPlot.Core">

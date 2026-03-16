@@ -37,7 +37,7 @@ namespace ESAPI_EQD2Viewer.UI.ViewModels
         // DVH data cache
         private readonly List<DVHCacheEntry> _dvhCache = new List<DVHCacheEntry>();
 
-        #region Isodose Properties
+        #region Isodose Image Properties
 
         private WriteableBitmap _ctImageSource;
         public WriteableBitmap CtImageSource
@@ -90,6 +90,59 @@ namespace ESAPI_EQD2Viewer.UI.ViewModels
 
         #endregion
 
+        #region Dose Display Mode Properties
+
+        private DoseDisplayMode _doseDisplayMode = DoseDisplayMode.Line;
+        public DoseDisplayMode DoseDisplayMode
+        {
+            get => _doseDisplayMode;
+            set
+            {
+                if (SetProperty(ref _doseDisplayMode, value))
+                {
+                    OnPropertyChanged(nameof(IsLineMode));
+                    OnPropertyChanged(nameof(IsFillMode));
+                    OnPropertyChanged(nameof(IsColorwashMode));
+                    RequestRender();
+                }
+            }
+        }
+
+        /// <summary>
+        /// Convenience booleans for RadioButton binding.
+        /// </summary>
+        public bool IsLineMode
+        {
+            get => _doseDisplayMode == DoseDisplayMode.Line;
+            set { if (value) DoseDisplayMode = DoseDisplayMode.Line; }
+        }
+        public bool IsFillMode
+        {
+            get => _doseDisplayMode == DoseDisplayMode.Fill;
+            set { if (value) DoseDisplayMode = DoseDisplayMode.Fill; }
+        }
+        public bool IsColorwashMode
+        {
+            get => _doseDisplayMode == DoseDisplayMode.Colorwash;
+            set { if (value) DoseDisplayMode = DoseDisplayMode.Colorwash; }
+        }
+
+        private double _colorwashOpacity = 0.45;
+        public double ColorwashOpacity
+        {
+            get => _colorwashOpacity;
+            set { if (SetProperty(ref _colorwashOpacity, value)) RequestRender(); }
+        }
+
+        private double _colorwashMinPercent = 0.10;
+        public double ColorwashMinPercent
+        {
+            get => _colorwashMinPercent;
+            set { if (SetProperty(ref _colorwashMinPercent, value)) RequestRender(); }
+        }
+
+        #endregion
+
         #region EQD2 Properties
 
         private bool _isEQD2Enabled;
@@ -113,9 +166,7 @@ namespace ESAPI_EQD2Viewer.UI.ViewModels
             set
             {
                 if (SetProperty(ref _globalAlphaBeta, value))
-                {
                     RequestRender();
-                }
             }
         }
 
@@ -140,9 +191,7 @@ namespace ESAPI_EQD2Viewer.UI.ViewModels
             set
             {
                 if (SetProperty(ref _meanMethod, value))
-                {
                     if (_dvhCache.Any()) RecalculateAllDVH();
-                }
             }
         }
 
@@ -153,9 +202,7 @@ namespace ESAPI_EQD2Viewer.UI.ViewModels
             set
             {
                 if (SetProperty(ref _useDifferentialMethod, value))
-                {
                     MeanMethod = value ? EQD2MeanMethod.Differential : EQD2MeanMethod.Simple;
-                }
             }
         }
 
@@ -188,6 +235,16 @@ namespace ESAPI_EQD2Viewer.UI.ViewModels
         public ObservableCollection<IsodoseLevel> IsodoseLevels { get; }
         private IsodoseLevel[] _isodoseLevelArray;
 
+        /// <summary>
+        /// Selected preset name for UI display.
+        /// </summary>
+        private string _isodosePresetName = "Default (4)";
+        public string IsodosePresetName
+        {
+            get => _isodosePresetName;
+            set => SetProperty(ref _isodosePresetName, value);
+        }
+
         #endregion
 
         public MainViewModel(ScriptContext context, IImageRenderingService renderingService,
@@ -199,16 +256,26 @@ namespace ESAPI_EQD2Viewer.UI.ViewModels
             _debugExportService = debugExportService ?? throw new ArgumentNullException(nameof(debugExportService));
             _dvhService = dvhService ?? throw new ArgumentNullException(nameof(dvhService));
 
-            // Isodose levels
-            var defaults = IsodoseLevel.GetDefaults();
+            // Isodose levels — start with Eclipse defaults
+            var defaults = IsodoseLevel.GetEclipseDefaults();
             IsodoseLevels = new ObservableCollection<IsodoseLevel>(defaults);
             _isodoseLevelArray = defaults;
+            _isodosePresetName = "Eclipse (10)";
+
+            // Wire up change notifications
             IsodoseLevels.CollectionChanged += (s, e) =>
             {
-                _isodoseLevelArray = new IsodoseLevel[IsodoseLevels.Count];
-                IsodoseLevels.CopyTo(_isodoseLevelArray, 0);
-                RequestRender();
+                RebuildIsodoseArray();
+                // Subscribe to new items' PropertyChanged
+                if (e.NewItems != null)
+                    foreach (IsodoseLevel item in e.NewItems)
+                        item.PropertyChanged += OnIsodoseLevelChanged;
+                if (e.OldItems != null)
+                    foreach (IsodoseLevel item in e.OldItems)
+                        item.PropertyChanged -= OnIsodoseLevelChanged;
             };
+            foreach (var level in IsodoseLevels)
+                level.PropertyChanged += OnIsodoseLevelChanged;
 
             // Image setup
             int width = _context.Image.XSize;
@@ -216,11 +283,8 @@ namespace ESAPI_EQD2Viewer.UI.ViewModels
             _maxSlice = _context.Image.ZSize - 1;
             _currentSlice = _maxSlice / 2;
 
-            // Read fractions from plan
             if (_plan != null)
-            {
                 _numberOfFractions = _plan.NumberOfFractions ?? 1;
-            }
 
             // Initialize rendering
             _renderingService.Initialize(width, height);
@@ -232,11 +296,25 @@ namespace ESAPI_EQD2Viewer.UI.ViewModels
             CtImageSource = new WriteableBitmap(width, height, 96, 96, PixelFormats.Bgra32, null);
             DoseImageSource = new WriteableBitmap(width, height, 96, 96, PixelFormats.Bgra32, null);
 
-            // Initialize DVH plot
             InitializePlotModel();
-
-            // Apply default windowing
             AutoPreset();
+        }
+
+        private void OnIsodoseLevelChanged(object sender, PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(IsodoseLevel.IsVisible) ||
+                e.PropertyName == nameof(IsodoseLevel.Fraction) ||
+                e.PropertyName == nameof(IsodoseLevel.Alpha))
+            {
+                RebuildIsodoseArray();
+                RequestRender();
+            }
+        }
+
+        private void RebuildIsodoseArray()
+        {
+            _isodoseLevelArray = new IsodoseLevel[IsodoseLevels.Count];
+            IsodoseLevels.CopyTo(_isodoseLevelArray, 0);
         }
 
         private double GetPrescriptionGy()
@@ -249,27 +327,53 @@ namespace ESAPI_EQD2Viewer.UI.ViewModels
 
         private void InitializePlotModel()
         {
-            PlotModel = new PlotModel { Title = "DVH" };
+            PlotModel = new PlotModel
+            {
+                Title = "DVH",
+                TitleColor = OxyColors.White,
+                PlotAreaBorderColor = OxyColor.FromRgb(80, 80, 80),
+                Background = OxyColor.FromRgb(26, 26, 26),
+                TextColor = OxyColors.White,
+            };
+
             PlotModel.Axes.Add(new LinearAxis
             {
                 Position = AxisPosition.Bottom,
                 Title = "Dose (Gy)",
                 Minimum = 0,
+                TitleColor = OxyColors.White,
+                TextColor = OxyColor.FromRgb(200, 200, 200),
+                TicklineColor = OxyColors.Gray,
                 MajorGridlineStyle = LineStyle.Solid,
-                MinorGridlineStyle = LineStyle.Dot
+                MajorGridlineColor = OxyColor.FromRgb(55, 55, 55),
+                MinorGridlineStyle = LineStyle.Dot,
+                MinorGridlineColor = OxyColor.FromRgb(40, 40, 40),
+                AxislineColor = OxyColors.Gray,
             });
+
             PlotModel.Axes.Add(new LinearAxis
             {
                 Position = AxisPosition.Left,
                 Title = "Volume (%)",
                 Minimum = 0,
                 Maximum = 101,
+                TitleColor = OxyColors.White,
+                TextColor = OxyColor.FromRgb(200, 200, 200),
+                TicklineColor = OxyColors.Gray,
                 MajorGridlineStyle = LineStyle.Solid,
-                MinorGridlineStyle = LineStyle.Dot
+                MajorGridlineColor = OxyColor.FromRgb(55, 55, 55),
+                MinorGridlineStyle = LineStyle.Dot,
+                MinorGridlineColor = OxyColor.FromRgb(40, 40, 40),
+                AxislineColor = OxyColors.Gray,
             });
+
             PlotModel.Legends.Add(new OxyPlot.Legends.Legend
             {
-                LegendPosition = OxyPlot.Legends.LegendPosition.RightTop
+                LegendPosition = OxyPlot.Legends.LegendPosition.RightTop,
+                LegendTextColor = OxyColors.White,
+                LegendBackground = OxyColor.FromArgb(200, 30, 30, 30),
+                LegendBorder = OxyColors.Gray,
+                LegendBorderThickness = 1,
             });
         }
 
@@ -296,7 +400,6 @@ namespace ESAPI_EQD2Viewer.UI.ViewModels
             double planTotalDoseGy = GetPrescriptionGy();
             double planNormalization = _plan?.PlanNormalizationValue ?? 100.0;
 
-            // Build EQD2 settings for isodose rendering
             EQD2Settings eqd2 = null;
             if (_isEQD2Enabled)
             {
@@ -310,23 +413,20 @@ namespace ESAPI_EQD2Viewer.UI.ViewModels
 
             StatusText = _renderingService.RenderDoseImage(
                 _context.Image, _plan?.Dose, DoseImageSource, CurrentSlice,
-                planTotalDoseGy, planNormalization, _isodoseLevelArray, eqd2);
+                planTotalDoseGy, planNormalization, _isodoseLevelArray,
+                _doseDisplayMode, _colorwashOpacity, _colorwashMinPercent, eqd2);
         }
 
         #endregion
 
         #region DVH Management
 
-        /// <summary>
-        /// Called from the UI to add structures for DVH analysis.
-        /// </summary>
         public void AddStructuresForDVH(IEnumerable<Structure> structures)
         {
             if (_plan == null || structures == null) return;
 
             foreach (var structure in structures)
             {
-                // Skip if already loaded
                 if (_dvhCache.Any(c => c.Structure.Id == structure.Id))
                     continue;
 
@@ -340,7 +440,6 @@ namespace ESAPI_EQD2Viewer.UI.ViewModels
                     DVHData = dvhData
                 });
 
-                // Determine default α/β based on structure type
                 double defaultAB = (structure.DicomType == "PTV" || structure.DicomType == "CTV" || structure.DicomType == "GTV")
                     ? 10.0 : 3.0;
 
@@ -348,24 +447,22 @@ namespace ESAPI_EQD2Viewer.UI.ViewModels
                 settingItem.PropertyChanged += OnStructureSettingChanged;
                 StructureSettings.Add(settingItem);
 
-                // Physical DVH summary
                 var physSummary = _dvhService.BuildPhysicalSummary(_plan, structure, dvhData);
                 SummaryData.Add(physSummary);
 
-                // Physical DVH curve on plot
                 var color = OxyColor.FromArgb(structure.Color.A, structure.Color.R, structure.Color.G, structure.Color.B);
                 var series = new LineSeries
                 {
                     Title = $"{structure.Id} ({_plan.Id})",
                     Tag = $"Physical_{_plan.Id}_{structure.Id}",
-                    Color = color
+                    Color = color,
+                    StrokeThickness = 2
                 };
                 series.Points.AddRange(dvhData.CurveData.Select(p =>
                     new DataPoint(ConvertDoseToGy(p.DoseValue), p.Volume)));
                 PlotModel.Series.Add(series);
             }
 
-            // Calculate EQD2 if enabled
             if (_isEQD2Enabled)
                 RecalculateAllDVH();
 
@@ -383,31 +480,24 @@ namespace ESAPI_EQD2Viewer.UI.ViewModels
 
         private void RecalculateAllDVH()
         {
-            // Remove old EQD2 series and summaries
             var oldSeries = PlotModel.Series.Where(s => (s.Tag as string)?.StartsWith("EQD2_") ?? false).ToList();
             foreach (var s in oldSeries) PlotModel.Series.Remove(s);
 
             var oldSummaries = SummaryData.Where(s => s.Type == "EQD2").ToList();
             foreach (var s in oldSummaries) SummaryData.Remove(s);
 
-            if (!_isEQD2Enabled)
-            {
-                RefreshPlot();
-                return;
-            }
+            if (!_isEQD2Enabled) { RefreshPlot(); return; }
 
             foreach (var entry in _dvhCache)
             {
                 var setting = StructureSettings.FirstOrDefault(s => s.Structure.Id == entry.Structure.Id);
                 double alphaBeta = setting?.AlphaBeta ?? 3.0;
 
-                // EQD2 summary
                 var eqd2Summary = _dvhService.BuildEQD2Summary(
                     entry.Plan, entry.Structure, entry.DVHData,
                     _numberOfFractions, alphaBeta, _meanMethod);
                 SummaryData.Add(eqd2Summary);
 
-                // EQD2 DVH curve
                 var curveInGy = entry.DVHData.CurveData.Select(p =>
                     new DVHPoint(
                         new DoseValue(ConvertDoseToGy(p.DoseValue), DoseValue.DoseUnit.Gy),
@@ -423,7 +513,8 @@ namespace ESAPI_EQD2Viewer.UI.ViewModels
                     Title = $"{entry.Structure.Id} EQD2 (α/β={alphaBeta:F1})",
                     LineStyle = LineStyle.Dash,
                     Tag = $"EQD2_{entry.Plan.Id}_{entry.Structure.Id}",
-                    Color = color
+                    Color = color,
+                    StrokeThickness = 2
                 };
                 eqd2Series.Points.AddRange(eqd2Curve.Select(p =>
                     new DataPoint(p.DoseValue.Dose, p.Volume)));
@@ -436,9 +527,7 @@ namespace ESAPI_EQD2Viewer.UI.ViewModels
         private void OnStructureSettingChanged(object sender, PropertyChangedEventArgs e)
         {
             if (e.PropertyName == nameof(StructureAlphaBetaItem.AlphaBeta) && _isEQD2Enabled)
-            {
                 RecalculateAllDVH();
-            }
         }
 
         private void UpdatePlotVisibility()
@@ -489,6 +578,65 @@ namespace ESAPI_EQD2Viewer.UI.ViewModels
         }
 
         [RelayCommand]
+        private void LoadIsodosePreset(string preset)
+        {
+            IsodoseLevel[] levels;
+            switch (preset)
+            {
+                case "Eclipse":
+                    levels = IsodoseLevel.GetEclipseDefaults();
+                    IsodosePresetName = "Eclipse (10)";
+                    break;
+                case "Minimal":
+                    levels = IsodoseLevel.GetMinimalSet();
+                    IsodosePresetName = "Minimal (3)";
+                    break;
+                default:
+                    levels = IsodoseLevel.GetDefaults();
+                    IsodosePresetName = "Default (4)";
+                    break;
+            }
+
+            IsodoseLevels.Clear();
+            foreach (var l in levels)
+                IsodoseLevels.Add(l);
+
+            RebuildIsodoseArray();
+            RequestRender();
+        }
+
+        [RelayCommand]
+        private void AddIsodoseLevel()
+        {
+            // Add a new level at 60% by default, user can edit
+            var newLevel = new IsodoseLevel(0.60, "60%", 0xFF9900FF);
+            newLevel.PropertyChanged += OnIsodoseLevelChanged;
+            IsodoseLevels.Add(newLevel);
+            RebuildIsodoseArray();
+            RequestRender();
+        }
+
+        [RelayCommand]
+        private void RemoveIsodoseLevel(IsodoseLevel level)
+        {
+            if (level != null && IsodoseLevels.Contains(level))
+            {
+                level.PropertyChanged -= OnIsodoseLevelChanged;
+                IsodoseLevels.Remove(level);
+                RebuildIsodoseArray();
+                RequestRender();
+            }
+        }
+
+        [RelayCommand]
+        private void ToggleAllIsodose(string visibleStr)
+        {
+            bool visible = visibleStr?.ToLower() == "true";
+            foreach (var level in IsodoseLevels)
+                level.IsVisible = visible;
+        }
+
+        [RelayCommand]
         private void CalculateEQD2()
         {
             IsEQD2Enabled = true;
@@ -519,9 +667,6 @@ namespace ESAPI_EQD2Viewer.UI.ViewModels
             _doseImageSource = null;
         }
 
-        /// <summary>
-        /// Internal cache entry for loaded DVH data.
-        /// </summary>
         private class DVHCacheEntry
         {
             public PlanSetup Plan { get; set; }
