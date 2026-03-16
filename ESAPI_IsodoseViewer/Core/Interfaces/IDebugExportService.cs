@@ -1,6 +1,6 @@
 ﻿using VMS.TPS.Common.Model.API;
 
-namespace ESAPI_IsodoseViewer.Services
+namespace ESAPI_IsodoseViewer.Core.Interfaces
 {
     public interface IDebugExportService
     {

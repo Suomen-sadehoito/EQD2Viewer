@@ -4,6 +4,7 @@ using System.Windows;
 using VMS.TPS.Common.Model.API;
 using VMS.TPS.Common.Model.Types;
 using ESAPI_IsodoseViewer.Core.Extensions;
+using ESAPI_IsodoseViewer.Core.Interfaces;
 
 namespace ESAPI_IsodoseViewer.Services
 {

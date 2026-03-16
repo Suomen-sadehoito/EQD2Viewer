@@ -19,6 +19,7 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
+        <!-- Main image viewer -->
         <controls:InteractiveImageViewer 
             Grid.Column="0" 
             Margin="10"
@@ -29,25 +30,52 @@
             WindowLevel="{Binding WindowLevel, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
             WindowWidth="{Binding WindowWidth, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
 
+        <!-- Side panel -->
         <StackPanel Grid.Column="1" Margin="10" Background="#222">
+            
+            <!-- Windowing controls -->
             <TextBlock Text="WINDOWING" Foreground="Gold" FontWeight="Bold" Margin="0,10,0,10" HorizontalAlignment="Center"/>
             
-            <TextBlock Text="{Binding WindowLevel, StringFormat='Level: {0:F0}'}" Foreground="White"/>
-            <Slider Minimum="-1000" Maximum="1000" Value="{Binding WindowLevel}"/>
+            <TextBlock Text="{Binding WindowLevel, StringFormat='Level: {0:F0}'}" Foreground="White" Margin="5,0"/>
+            <Slider Minimum="-1000" Maximum="1000" Value="{Binding WindowLevel}" Margin="5,0"/>
             
-            <TextBlock Text="{Binding WindowWidth, StringFormat='Width: {0:F0}'}" Foreground="White" Margin="0,10,0,0"/>
-            <Slider Minimum="1" Maximum="3000" Value="{Binding WindowWidth}"/>
+            <TextBlock Text="{Binding WindowWidth, StringFormat='Width: {0:F0}'}" Foreground="White" Margin="5,10,5,0"/>
+            <Slider Minimum="1" Maximum="3000" Value="{Binding WindowWidth}" Margin="5,0"/>
 
+            <!-- Presets -->
             <TextBlock Text="PRESETS" Foreground="Gold" FontWeight="Bold" Margin="0,20,0,10" HorizontalAlignment="Center"/>
             
-            <Button Content="Soft Tissue" Command="{Binding ExecutePresetCommand}" CommandParameter="Soft" Margin="0,2"/>
-            <Button Content="Lung" Command="{Binding ExecutePresetCommand}" CommandParameter="Lung" Margin="0,2"/>
-            <Button Content="Bone" Command="{Binding ExecutePresetCommand}" CommandParameter="Bone" Margin="0,2"/>
+            <Button Content="Soft Tissue" Command="{Binding PresetCommand}" CommandParameter="Soft" Margin="5,2"/>
+            <Button Content="Lung" Command="{Binding PresetCommand}" CommandParameter="Lung" Margin="5,2"/>
+            <Button Content="Bone" Command="{Binding PresetCommand}" CommandParameter="Bone" Margin="5,2"/>
             
-            <Button Content="AUTO" Command="{Binding ExecuteAutoPresetCommand}" Margin="0,10" Background="DarkGreen" Foreground="White"/>
-            <Button Content="EXPORT DEBUG INFO" Command="{Binding ExecuteDebugCommand}" Margin="0,20" Background="DarkRed" Foreground="White"/>
+            <Button Content="AUTO" Command="{Binding AutoPresetCommand}" Margin="5,10" Background="DarkGreen" Foreground="White"/>
+
+            <!-- Isodose legend -->
+            <TextBlock Text="ISODOSE LEVELS" Foreground="Gold" FontWeight="Bold" Margin="0,20,0,10" HorizontalAlignment="Center"/>
+            
+            <ItemsControl ItemsSource="{Binding IsodoseLevels}" Margin="5,0">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <StackPanel Orientation="Horizontal" Margin="0,2">
+                            <Rectangle Width="16" Height="16" Margin="0,0,8,0">
+                                <Rectangle.Fill>
+                                    <SolidColorBrush Color="{Binding Color, Converter={x:Null}}" />
+                                </Rectangle.Fill>
+                            </Rectangle>
+                            <!-- We use a simple TextBlock since converter would add complexity.
+                                 The color rectangles are set in code-behind (see ViewerWindow.xaml.cs). -->
+                            <TextBlock Text="{Binding Label}" Foreground="White" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <!-- Debug -->
+            <Button Content="EXPORT DEBUG INFO" Command="{Binding DebugCommand}" Margin="5,20" Background="DarkRed" Foreground="White"/>
         </StackPanel>
 
+        <!-- Bottom slice slider -->
         <StackPanel Grid.Row="1" Grid.ColumnSpan="2" Orientation="Horizontal" Margin="10" Background="#333">
             <TextBlock Text="Slice (Z):" Foreground="White" VerticalAlignment="Center" Margin="10,0"/>
             
@@ -55,7 +83,8 @@
                     Minimum="0" 
                     Maximum="{Binding MaxSlice}" 
                     Value="{Binding CurrentSlice}"
-                    IsSnapToTickEnabled="True"/>
+                    IsSnapToTickEnabled="True"
+                    TickFrequency="1"/>
             
             <TextBlock Text="{Binding StatusText}" Foreground="White" VerticalAlignment="Center"/>
         </StackPanel>

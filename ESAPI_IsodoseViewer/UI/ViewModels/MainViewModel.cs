@@ -1,25 +1,30 @@
 ﻿using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using ESAPI_IsodoseViewer.Services;
 using System;
+using System.Collections.ObjectModel;
+using System.Threading;
+using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using VMS.TPS.Common.Model.API;
 using VMS.TPS.Common.Model.Types;
 using ESAPI_IsodoseViewer.Core.Interfaces;
+using ESAPI_IsodoseViewer.Core.Models;
 
 namespace ESAPI_IsodoseViewer.UI.ViewModels
 {
-    public partial class MainViewModel : ObservableObject
+    public partial class MainViewModel : ObservableObject, IDisposable
     {
         private readonly ScriptContext _context;
         private readonly PlanSetup _plan;
         private readonly IImageRenderingService _renderingService;
         private readonly IDebugExportService _debugExportService;
-        private bool _renderPending = false;
 
-        #region Properties (Manual implementation for 100% stability)
+        private int _renderPendingFlag = 0;
+        private bool _disposed;
+
+        #region Observable Properties
 
         private WriteableBitmap _ctImageSource;
         public WriteableBitmap CtImageSource
@@ -84,12 +89,27 @@ namespace ESAPI_IsodoseViewer.UI.ViewModels
 
         #endregion
 
+        public ObservableCollection<IsodoseLevel> IsodoseLevels { get; }
+
+        private IsodoseLevel[] _isodoseLevelArray;
+
         public MainViewModel(ScriptContext context, IImageRenderingService renderingService, IDebugExportService debugExportService)
         {
-            _context = context;
+            _context = context ?? throw new ArgumentNullException(nameof(context));
             _plan = context.ExternalPlanSetup;
-            _renderingService = renderingService;
-            _debugExportService = debugExportService;
+            _renderingService = renderingService ?? throw new ArgumentNullException(nameof(renderingService));
+            _debugExportService = debugExportService ?? throw new ArgumentNullException(nameof(debugExportService));
+
+            var defaults = IsodoseLevel.GetDefaults();
+            IsodoseLevels = new ObservableCollection<IsodoseLevel>(defaults);
+            _isodoseLevelArray = defaults;
+
+            IsodoseLevels.CollectionChanged += (s, e) =>
+            {
+                _isodoseLevelArray = new IsodoseLevel[IsodoseLevels.Count];
+                IsodoseLevels.CopyTo(_isodoseLevelArray, 0);
+                RequestRender();
+            };
 
             int width = _context.Image.XSize;
             int height = _context.Image.YSize;
@@ -99,7 +119,16 @@ namespace ESAPI_IsodoseViewer.UI.ViewModels
 
             _renderingService.Initialize(width, height);
             StatusText = "Loading image and dose data into memory...";
-            _renderingService.PreloadData(_context.Image, _plan?.Dose);
+
+            double prescriptionGy = 0;
+            if (_plan != null)
+            {
+                prescriptionGy = _plan.TotalDose.Unit == DoseValue.DoseUnit.cGy
+                    ? _plan.TotalDose.Dose / 100.0
+                    : _plan.TotalDose.Dose;
+            }
+
+            _renderingService.PreloadData(_context.Image, _plan?.Dose, prescriptionGy);
 
             CtImageSource = new WriteableBitmap(width, height, 96, 96, PixelFormats.Bgra32, null);
             DoseImageSource = new WriteableBitmap(width, height, 96, 96, PixelFormats.Bgra32, null);
@@ -109,25 +138,29 @@ namespace ESAPI_IsodoseViewer.UI.ViewModels
 
         private void RequestRender()
         {
-            if (_renderPending) return;
-            _renderPending = true;
+            if (Interlocked.CompareExchange(ref _renderPendingFlag, 1, 0) != 0)
+                return;
 
             System.Windows.Application.Current.Dispatcher.BeginInvoke(new Action(() =>
             {
-                _renderPending = false;
+                Interlocked.Exchange(ref _renderPendingFlag, 0);
                 RenderScene();
             }), DispatcherPriority.Render);
         }
 
         private void RenderScene()
         {
-            if (_context.Image == null) return;
+            if (_disposed || _context.Image == null) return;
 
             _renderingService.RenderCtImage(_context.Image, CtImageSource, CurrentSlice, WindowLevel, WindowWidth);
 
-            double planTotalDose = _plan?.TotalDose.Unit == DoseValue.DoseUnit.cGy
-                ? _plan.TotalDose.Dose / 100.0
-                : _plan?.TotalDose.Dose ?? 0;
+            double planTotalDoseGy = 0;
+            if (_plan != null)
+            {
+                planTotalDoseGy = _plan.TotalDose.Unit == DoseValue.DoseUnit.cGy
+                    ? _plan.TotalDose.Dose / 100.0
+                    : _plan.TotalDose.Dose;
+            }
 
             double planNormalization = _plan?.PlanNormalizationValue ?? 100.0;
 
@@ -136,8 +169,9 @@ namespace ESAPI_IsodoseViewer.UI.ViewModels
                 _plan?.Dose,
                 DoseImageSource,
                 CurrentSlice,
-                planTotalDose,
-                planNormalization);
+                planTotalDoseGy,
+                planNormalization,
+                _isodoseLevelArray);
         }
 
         [RelayCommand]
@@ -152,9 +186,18 @@ namespace ESAPI_IsodoseViewer.UI.ViewModels
         {
             switch (type)
             {
-                case "Soft": WindowLevel = 40; WindowWidth = 400; break;
-                case "Lung": WindowLevel = -600; WindowWidth = 1600; break;
-                case "Bone": WindowLevel = 300; WindowWidth = 1500; break;
+                case "Soft":
+                    WindowLevel = 40;
+                    WindowWidth = 400;
+                    break;
+                case "Lung":
+                    WindowLevel = -600;
+                    WindowWidth = 1600;
+                    break;
+                case "Bone":
+                    WindowLevel = 300;
+                    WindowWidth = 1500;
+                    break;
             }
         }
 
@@ -162,6 +205,15 @@ namespace ESAPI_IsodoseViewer.UI.ViewModels
         private void Debug()
         {
             _debugExportService.ExportDebugLog(_context, _plan, CurrentSlice);
+        }
+
+        public void Dispose()
+        {
+            if (_disposed) return;
+            _disposed = true;
+            _renderingService?.Dispose();
+            _ctImageSource = null;
+            _doseImageSource = null;
         }
     }
 }
