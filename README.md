@@ -21,10 +21,11 @@ Avaa `ESAPI_EQD2Viewer.sln` Visual Studiossa. Käännä **Release|x64**. Costura
 2. Aja skripti
 
 ## Versiohistoria
-
+ 
 | Versio | Päivämäärä | Kuvaus |
 |--------|------------|--------|
-| 0.1.0-alpha | 2026-03 | Ensimmäinen alpha. CT/annos-näyttö, isodoosit, EQD2-muunnos, summaatio, DVH, rakennekohtainen α/β. |
+| 0.2.0-alpha | 2026-03 | Yksikkötestit (107 kpl), ESAPI-stub-kirjasto CI-kääntämiseen, GitHub Actions -pipeline. |
+| 0.1.0-alpha | 2026-03 | Ensimmäinen alpha. CT/annos-näyttö, isodoosit, EQD2-muunnos, summaatio, DVH, rakennekohtainen α/β. | |
 
 ## Tekijät
 
