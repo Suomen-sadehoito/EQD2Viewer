@@ -14,6 +14,7 @@
 		<Deterministic>true</Deterministic>
 		<NuGetPackageImportStamp />
 		<TargetFrameworkProfile />
+		<LangVersion>8.0</LangVersion>
 	</PropertyGroup>
 	<PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
 		<DebugSymbols>true</DebugSymbols>
@@ -41,7 +42,6 @@
 		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 		<DebugType>full</DebugType>
 		<PlatformTarget>x64</PlatformTarget>
-		<LangVersion>8.0</LangVersion>
 		<ErrorReport>prompt</ErrorReport>
 	</PropertyGroup>
 	<PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release|x64'">
@@ -51,7 +51,6 @@
 		<Optimize>true</Optimize>
 		<DebugType>pdbonly</DebugType>
 		<PlatformTarget>x64</PlatformTarget>
-		<LangVersion>8.0</LangVersion>
 		<ErrorReport>prompt</ErrorReport>
 	</PropertyGroup>
 	<!-- Framework references -->
