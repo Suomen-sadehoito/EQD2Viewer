@@ -7,10 +7,15 @@
 		<IsTestProject>true</IsTestProject>
 		<PlatformTarget>x64</PlatformTarget>
 		<Platforms>AnyCPU;x64</Platforms>
-		<!-- Suppress version conflict warnings from CommunityToolkit.Mvvm (netstandard2.0)
-		     pulling newer System.Memory/Buffers/etc. than net48 resolves natively.
-		     Safe to ignore — net48 BCL provides compatible implementations at runtime. -->
 		<MSBuildWarningsAsMessages>MSB3277</MSBuildWarningsAsMessages>
+	</PropertyGroup>
+
+	<!-- Sama HasRealEsapi-logiikka kuin pääprojektissa -->
+	<PropertyGroup>
+		<RealEsapiLibPath>$(MSBuildThisFileDirectory)..\lib\</RealEsapiLibPath>
+		<HasRealEsapi>false</HasRealEsapi>
+		<HasRealEsapi Condition="Exists('$(RealEsapiLibPath)VMS.TPS.Common.Model.API.dll')">true</HasRealEsapi>
+		<HasRealEsapi Condition="'$(CI)' == 'true'">false</HasRealEsapi>
 	</PropertyGroup>
 
 	<ItemGroup>
@@ -24,44 +29,50 @@
 	</ItemGroup>
 
 	<ItemGroup>
+		<ProjectReference Include="..\ESAPI_EQD2Viewer\ESAPI_EQD2Viewer.csproj">
+			<PrivateAssets>all</PrivateAssets>
+		</ProjectReference>
+	</ItemGroup>
+
+	<ItemGroup>
 		<Reference Include="WindowsBase" />
 		<Reference Include="PresentationCore" />
 		<Reference Include="PresentationFramework" />
 	</ItemGroup>
 
+	<!-- Lokaali: käytä oikeita ESAPI DLL:iä -->
+	<ItemGroup Condition="'$(HasRealEsapi)' == 'true'">
+		<Reference Include="VMS.TPS.Common.Model.API">
+			<HintPath>..\lib\VMS.TPS.Common.Model.API.dll</HintPath>
+		</Reference>
+		<Reference Include="VMS.TPS.Common.Model.Types">
+			<HintPath>..\lib\VMS.TPS.Common.Model.Types.dll</HintPath>
+		</Reference>
+	</ItemGroup>
+
 	<ItemGroup>
-		<!-- Global usings applied to all test files automatically.
-		     System: provides Math, Random, etc.
-		     Xunit: provides Fact, Theory, InlineData, etc. -->
 		<Using Include="System" />
 		<Using Include="Xunit" />
 	</ItemGroup>
-
-	<!-- Main project reference — Stubs flow transitively through this when lib/ is
-	     missing (CI/GitHub). Do NOT add a direct Stubs reference here; that causes
-	     CS0433 duplicate type errors when real ESAPI DLLs are also present. -->
-	<ItemGroup>
-		<ProjectReference Include="..\ESAPI_EQD2Viewer\ESAPI_EQD2Viewer.csproj" />
-	</ItemGroup>
-
-	<!-- Local dev: real ESAPI DLLs present in lib/ (not committed to git).
-	     Private=False prevents double-copying — ESAPI runtime provides them
-	     at execution time inside Eclipse/Aria. -->
-	<ItemGroup Condition="Exists('..\lib\VMS.TPS.Common.Model.API.dll')">
-		<Reference Include="VMS.TPS.Common.Model.API">
-			<HintPath>..\lib\VMS.TPS.Common.Model.API.dll</HintPath>			
-		</Reference>
-		<Reference Include="VMS.TPS.Common.Model.Types">
-			<HintPath>..\lib\VMS.TPS.Common.Model.Types.dll</HintPath>			
-		</Reference>
-	</ItemGroup>
-
-	<!-- CI/GitHub: no ESAPI DLLs — Stubs come transitively via
-	     ESAPI_EQD2Viewer.csproj. No direct Stubs reference needed here. -->
 
 	<ItemGroup>
 		<Content Include="TestFixtures\**\*.json">
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 		</Content>
 	</ItemGroup>
+
+	<!--
+		Turvamekanismi: Jos Stubs.dll vuotaa transitiivisesti pääprojektin
+		kautta (esim. vanhasta bin-kansiosta), poistetaan se resolve-vaiheessa
+		kun oikeat ESAPI DLL:t ovat käytössä. Estää CS0433-konfliktin.
+	-->
+	<Target Name="RemoveStaleStubs"
+			AfterTargets="ResolveAssemblyReferences"
+			Condition="'$(HasRealEsapi)' == 'true'">
+		<ItemGroup>
+			<ReferencePath Remove="@(ReferencePath)" Condition="'%(FileName)' == 'ESAPI_EQD2Viewer.Stubs'" />
+			<ReferenceDependencyPaths Remove="@(ReferenceDependencyPaths)" Condition="'%(FileName)' == 'ESAPI_EQD2Viewer.Stubs'" />
+		</ItemGroup>
+		<Message Text="[ESAPI Build] Removed stale Stubs reference - using real ESAPI DLLs" Importance="high" />
+	</Target>
 </Project>
