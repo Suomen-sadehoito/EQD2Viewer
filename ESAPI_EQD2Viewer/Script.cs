@@ -1,67 +1,84 @@
+// NOTE: This file is kept for reference only.
+// The canonical Eclipse ESAPI entry point has been moved to EQD2Viewer.Esapi\Script.cs,
+// which is the sole assembly carrying the [ESAPIScript] attribute.
+// This file should NOT be deployed to Eclipse — deploy ESAPI_EQD2Viewer.esapi.dll instead.
+
 using System;
 using System.Windows;
 using VMS.TPS.Common.Model.API;
-using EQD2Viewer.Core.Interfaces;
 using EQD2Viewer.Core.Interfaces;
 using EQD2Viewer.Core.Logging;
 using ESAPI_EQD2Viewer.Services;
 using ESAPI_EQD2Viewer.UI.ViewModels;
 using ESAPI_EQD2Viewer.UI.Views;
-using EQD2Viewer.Core.Data;
-using EQD2Viewer.Core.Models;
-using EQD2Viewer.Core.Calculations;
-using EQD2Viewer.Core.Logging;
 
-[assembly: ESAPIScript(IsWriteable = false)]
 namespace VMS.TPS
 {
+    /// <summary>
+    /// Legacy Eclipse entry point — superseded by EQD2Viewer.Esapi\Script.cs.
+    /// Uses ESAPI_EQD2Viewer.Adapters namespace (the old adapter location).
+    /// Left in place so the ESAPI_EQD2Viewer project continues to compile
+    /// as a standalone WPF library without breaking the DevRunner or tests.
+    /// </summary>
     public class Script
     {
-        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+        [System.Runtime.CompilerServices.MethodImpl(
+            System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
         public void Execute(ScriptContext context)
         {
             if (context.Patient == null || context.Image == null)
             {
-                MessageBox.Show("Please open a patient with an image before running the script.",
-                    "EQD2 Viewer", MessageBoxButton.OK, MessageBoxImage.Warning);
-                return;
+                MessageBox.Show(
+        "Please open a patient with an image before running the script.",
+ "EQD2 Viewer",
+                    MessageBoxButton.OK,
+        MessageBoxImage.Warning);
+          return;
             }
 
-            try
-            {
-                SimpleLogger.EnableFileLogging();
+    try
+   {
+           SimpleLogger.EnableFileLogging();
 
-                // â”€â”€ Load data through Clean Architecture adapter â”€â”€
-                var dataSource = new ESAPI_EQD2Viewer.Adapters.EsapiDataSource(context);
-                var snapshot = dataSource.LoadSnapshot();
+   // -- Load clinical snapshot via ESAPI adapter --
+            var dataSource = new ESAPI_EQD2Viewer.Adapters.EsapiDataSource(context);
+         var snapshot   = dataSource.LoadSnapshot();
 
-                IImageRenderingService renderingService = new ImageRenderingService();
-                IDebugExportService debugService = new DebugExportService();
-                IDVHCalculation dvhService = new DVHService();
+       // -- Create WPF-layer services --
+    IImageRenderingService renderingService = new ImageRenderingService();
+IDebugExportService    debugService     = new DebugExportService();
+                IDVHCalculation        dvhService       = new DVHService();
 
-                // Summation data loader for on-demand plan loading
-                ISummationDataLoader summationLoader = new ESAPI_EQD2Viewer.Adapters.EsapiSummationDataLoader(context.Patient);
+            // -- Summation data loader --
+                ISummationDataLoader summationLoader =
+          new ESAPI_EQD2Viewer.Adapters.EsapiSummationDataLoader(context.Patient);
 
-                int width = snapshot.CtImage.XSize;
-                int height = snapshot.CtImage.YSize;
-
-                renderingService.Initialize(width, height);
+                // -- Initialise rendering pipeline --
+          int width  = snapshot.CtImage.XSize;
+       int height = snapshot.CtImage.YSize;
+        renderingService.Initialize(width, height);
                 renderingService.PreloadData(snapshot.CtImage, snapshot.Dose);
 
-                // Use the new snapshot-based constructor with summation support
-                var viewModel = new MainViewModel(snapshot, renderingService, debugService, dvhService, summationLoader);
+  // -- Build ViewModel and launch window --
+                var viewModel = new MainViewModel(
+          snapshot,
+          renderingService,
+          debugService,
+    dvhService,
+            summationLoader);
 
-                // Use the snapshot-based constructor for MainWindow
-                var window = new MainWindow(viewModel);
-
-                window.ShowDialog();
-            }
-            catch (Exception ex)
+       var window = new MainWindow(viewModel);
+   window.ShowDialog();
+ }
+      catch (Exception ex)
             {
-                SimpleLogger.Error("Fatal error in Script.Execute", ex);
-                MessageBox.Show($"Error:\n\n{ex.Message}\n\nStack Trace:\n{ex.StackTrace}",
-                    "EQD2 Viewer Error", MessageBoxButton.OK, MessageBoxImage.Error);
-            }
+          SimpleLogger.Error("Fatal error in Script.Execute", ex);
+            MessageBox.Show(
+    $"Error:\n\n{ex.Message}\n\nStack Trace:\n{ex.StackTrace}",
+       "EQD2 Viewer Error",
+           MessageBoxButton.OK,
+         MessageBoxImage.Error);
+      }
         }
     }
 }
