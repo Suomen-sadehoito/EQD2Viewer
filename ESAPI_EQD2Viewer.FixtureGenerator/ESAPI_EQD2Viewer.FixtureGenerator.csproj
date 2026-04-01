@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
   <PropertyGroup>
@@ -31,14 +31,14 @@
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
-  <!-- Sama HasRealEsapi-logiikka kuin pääprojektissa -->
+  <!-- Sama HasRealEsapi-logiikka kuin pÃ¤Ã¤projektissa -->
   <PropertyGroup>
     <RealEsapiLibPath>$(MSBuildThisFileDirectory)..\lib\</RealEsapiLibPath>
     <HasRealEsapi>false</HasRealEsapi>
     <HasRealEsapi Condition="Exists('$(RealEsapiLibPath)VMS.TPS.Common.Model.API.dll')">true</HasRealEsapi>
     <HasRealEsapi Condition="'$(CI)' == 'true'">false</HasRealEsapi>
   </PropertyGroup>
-  <!-- Lokaali: käytä oikeita ESAPI DLL:iä -->
+  <!-- Lokaali: kÃ¤ytÃ¤ oikeita ESAPI DLL:iÃ¤ -->
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|x64'">
     <DebugSymbols>true</DebugSymbols>
     <OutputPath>bin\x64\Debug\</OutputPath>
@@ -82,12 +82,16 @@
     <Compile Include="Script.cs" />
     <Compile Include="FixtureExporter.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="SnapshotExporter.cs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\EQD2Viewer.Core\EQD2Viewer.Core.csproj">
       <Project>{4aecd0f8-4bda-4450-a70f-0782c2bc3d3c}</Project>
       <Name>EQD2Viewer.Core</Name>
     </ProjectReference>
+    <ProjectReference Include="..\EQD2Viewer.Esapi\EQD2Viewer.Esapi.csproj">
+      <Name>EQD2Viewer.Esapi</Name>
+</ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

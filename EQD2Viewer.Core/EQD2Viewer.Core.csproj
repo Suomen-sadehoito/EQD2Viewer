@@ -80,6 +80,7 @@
     <Compile Include="Models\EQD2Settings.cs" />
     <Compile Include="Models\SummationConfig.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="Serialization\SnapshotSerializer.cs" />
   </ItemGroup>
   <ItemGroup />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />

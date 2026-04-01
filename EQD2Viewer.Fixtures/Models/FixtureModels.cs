@@ -10,6 +10,7 @@ namespace EQD2Viewer.Fixtures.Models
         public string patientId { get; set; }
         public string courseId { get; set; }
         public string planId { get; set; }
+        public string planType { get; set; }   // "PlanSetup" or "PlanSum"
         public double totalDoseGy { get; set; }
         public int numberOfFractions { get; set; }
         public double planNormalization { get; set; }
