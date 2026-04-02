@@ -37,22 +37,22 @@ MessageBoxImage.Warning);
             }
 
             try
-            {
+     {
         SimpleLogger.EnableFileLogging();
 
     // — Load the full clinical snapshot via the ESAPI adapter layer —
-                var dataSource = new EQD2Viewer.Esapi.Adapters.EsapiDataSource(context);
+              var dataSource = new EQD2Viewer.Esapi.Adapters.EsapiDataSource(context);
    var snapshot = dataSource.LoadSnapshot();
 
  // — Create the ESAPI summation data loader for on-demand plan loading —
-    ISummationDataLoader summationLoader =
+ ISummationDataLoader summationLoader =
  new EQD2Viewer.Esapi.Adapters.EsapiSummationDataLoader(context.Patient);
 
-   // — Launch the UI via the composition root (no direct WPF type references here) —
+ // — Launch the UI via the composition root (no direct WPF type references here) —
     ESAPI_EQD2Viewer.AppLauncher.Launch(
-              snapshot,
-          summationLoader,
-          windowTitle: null,
+           snapshot,
+    summationLoader,
+   windowTitle: null,
         useShowDialog: true);
     }
    catch (Exception ex)

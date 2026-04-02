@@ -3,8 +3,8 @@ using System.Windows;
 using EQD2Viewer.Core.Data;
 using EQD2Viewer.Core.Interfaces;
 using EQD2Viewer.Core.Logging;
-using ESAPI_EQD2Viewer.Rendering;
-using ESAPI_EQD2Viewer.Services;
+using EQD2Viewer.Services;
+using EQD2Viewer.Services.Rendering;
 using ESAPI_EQD2Viewer.UI.ViewModels;
 using ESAPI_EQD2Viewer.UI.Views;
 

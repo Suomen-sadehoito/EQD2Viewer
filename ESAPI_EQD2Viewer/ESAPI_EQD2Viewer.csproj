@@ -64,19 +64,14 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\EQD2Viewer.Core\EQD2Viewer.Core.csproj" />
+    <ProjectReference Include="..\EQD2Viewer.Services\EQD2Viewer.Services.csproj">
+      <Project>{B2C3D4E5-F6A7-8901-BCDE-F12345678901}</Project>
+      <Name>EQD2Viewer.Services</Name>
+    </ProjectReference>
   </ItemGroup>
   <ItemGroup>
     <Compile Include="AppLauncher.cs" />
-    <Compile Include="Rendering\Interfaces\IImageRenderingService.cs" />
-    <Compile Include="Rendering\Models\IsodoseContourData.cs" />
-    <Compile Include="Rendering\Models\IsodoseLevel.cs" />
-    <Compile Include="Rendering\Models\StructureContourData.cs" />
-    <Compile Include="Services\DVHService.cs" />
-    <Compile Include="Services\DebugExportService.cs" />
     <Compile Include="Services\ExportService.cs" />
-    <Compile Include="Services\ImageRenderingService.cs" />
-    <Compile Include="Services\SummationService.cs" />
-    <Compile Include="Services\SummationServiceFactory.cs" />
     <Compile Include="UI\Controls\InteractiveImageViewer.xaml.cs">
       <DependentUpon>InteractiveImageViewer.xaml</DependentUpon>
     </Compile>

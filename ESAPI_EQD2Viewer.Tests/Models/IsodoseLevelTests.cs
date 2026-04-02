@@ -1,7 +1,7 @@
 using Xunit;
 using FluentAssertions;
 using EQD2Viewer.Core.Models;
-using ESAPI_EQD2Viewer.Rendering;
+using EQD2Viewer.Services.Rendering;
 using System.Linq;
 
 namespace ESAPI_EQD2Viewer.Tests.Models

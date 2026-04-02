@@ -104,9 +104,13 @@
       <Project>{4AECD0F8-4BDA-4450-A70F-0782C2BC3D3C}</Project>
 <Name>EQD2Viewer.Core</Name>
     </ProjectReference>
+    <ProjectReference Include="..\EQD2Viewer.Services\EQD2Viewer.Services.csproj">
+      <Project>{B2C3D4E5-F6A7-8901-BCDE-F12345678901}</Project>
+      <Name>EQD2Viewer.Services</Name>
+    </ProjectReference>
     <ProjectReference Include="..\ESAPI_EQD2Viewer\ESAPI_EQD2Viewer.csproj">
- <Project>{CB47C100-C47F-436D-8596-8005AB5B13A8}</Project>
-      <Name>ESAPI_EQD2Viewer</Name>
+      <Project>{CB47C100-C47F-436D-8596-8005AB5B13A8}</Project>
+  <Name>ESAPI_EQD2Viewer</Name>
     </ProjectReference>
   </ItemGroup>
 
