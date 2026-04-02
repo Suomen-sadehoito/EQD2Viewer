@@ -5,7 +5,6 @@ using EQD2Viewer.Core.Interfaces;
 using EQD2Viewer.Core.Logging;
 using EQD2Viewer.Core.Models;
 using ESAPI_EQD2Viewer.Rendering;
-using ESAPI_EQD2Viewer.Services;
 using ESAPI_EQD2Viewer.UI.Views;
 using OxyPlot;
 using OxyPlot.Series;
@@ -48,7 +47,7 @@ namespace ESAPI_EQD2Viewer.UI.ViewModels
         [RelayCommand]
         private async Task OpenSummationDialog()
         {
-            if (_summationDataLoader == null)
+            if (_summationDataLoader == null || _summationServiceFactory == null)
             {
                 MessageBox.Show("Plan summation is not available in this mode.\n" +
                                 "Summation requires full clinical data access.",
@@ -106,7 +105,8 @@ namespace ESAPI_EQD2Viewer.UI.ViewModels
             try
             {
                 _summationService?.Dispose();
-                _summationService = new SummationService(_snapshot.CtImage, _summationDataLoader, _snapshot.Registrations);
+                _summationService = _summationServiceFactory.Create(
+                    _snapshot.CtImage, _summationDataLoader, _snapshot.Registrations);
                 var prepResult = _summationService.PrepareData(config);
                 if (!prepResult.Success)
                 {

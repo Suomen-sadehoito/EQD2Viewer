@@ -115,7 +115,13 @@ sb.AppendLine("? patient.json");
       WriteCourses(snap.AllCourses, outputDir);
             sb.AppendLine($"? courses.json ({snap.AllCourses?.Count ?? 0} kurssia)");
 
-          return sb.ToString();
+    if (snap.RenderSettings != null)
+     {
+                WriteRenderSettings(snap.RenderSettings, outputDir);
+ sb.AppendLine($"? render_settings.json ({snap.RenderSettings.ReferenceDosePoints?.Count ?? 0} ref points)");
+  }
+
+   return sb.ToString();
       }
 
         // ????????????????????????????????????????????????????????
@@ -200,6 +206,10 @@ sb.AppendLine("? patient.json");
             if (File.Exists(coursesPath))
    snap.AllCourses = ReadCourses(ReadJson(coursesPath));
 
+            string renderPath = Path.Combine(dir, "render_settings.json");
+    if (File.Exists(renderPath))
+     snap.RenderSettings = ReadRenderSettings(ReadJson(renderPath));
+
             return snap;
         }
 
@@ -214,52 +224,58 @@ sb.AppendLine("? patient.json");
       public static string WriteBinary(ClinicalSnapshot snap, string outputDir)
    {
   Directory.CreateDirectory(outputDir);
-            var sb = new StringBuilder();
+          var sb = new StringBuilder();
 
-            WriteBinaryMeta(snap, outputDir);
+    WriteBinaryMeta(snap, outputDir);
             sb.AppendLine("wrote snapshot_meta.json (binary v3.0)");
 
        WritePatient(snap.Patient, outputDir);
-     sb.AppendLine("wrote patient.json");
+          sb.AppendLine("wrote patient.json");
 
-          if (snap.ActivePlan != null)
-            {
+       if (snap.ActivePlan != null)
+        {
          WritePlan(snap.ActivePlan, outputDir);
-             sb.AppendLine("wrote plan.json");
-      }
-
-            if (snap.CtImage != null)
-     {
-         WriteGeometry(snap.CtImage.Geometry, Path.Combine(outputDir, "ct_geometry.json"));
-    WriteJson(Path.Combine(outputDir, "ct_huoffset.json"),
-            $"{{\"huOffset\":{snap.CtImage.HuOffset}}}");
-     WriteVolumeBinary(snap.CtImage.Voxels, Path.Combine(outputDir, "ct_volume.bin.gz"));
-                var g = snap.CtImage.Geometry;
-           sb.AppendLine($"wrote ct_volume.bin.gz ({g.XSize}x{g.YSize}x{g.ZSize})");
-            }
-
-        if (snap.Dose != null)
-      {
-                WriteGeometry(snap.Dose.Geometry, Path.Combine(outputDir, "dose_geometry.json"));
-        WriteScaling(snap.Dose.Scaling, outputDir);
-   WriteVolumeBinary(snap.Dose.Voxels, Path.Combine(outputDir, "dose_volume.bin.gz"));
-      var g = snap.Dose.Geometry;
-   sb.AppendLine($"wrote dose_volume.bin.gz ({g.XSize}x{g.YSize}x{g.ZSize})");
+         sb.AppendLine("wrote plan.json");
      }
 
-        WriteStructures(snap.Structures, outputDir);
-      sb.AppendLine($"wrote structures.json ({snap.Structures?.Count ?? 0})");
+          if (snap.CtImage != null)
+       {
+      WriteGeometry(snap.CtImage.Geometry, Path.Combine(outputDir, "ct_geometry.json"));
+ WriteJson(Path.Combine(outputDir, "ct_huoffset.json"),
+          $"{{\"huOffset\":{snap.CtImage.HuOffset}}}");
+        WriteVolumeBinary(snap.CtImage.Voxels, Path.Combine(outputDir, "ct_volume.bin.gz"));
+        var g = snap.CtImage.Geometry;
+       sb.AppendLine($"wrote ct_volume.bin.gz ({g.XSize}x{g.YSize}x{g.ZSize})");
+            }
 
-            WriteDvhCurves(snap.DvhCurves, outputDir);
-   sb.AppendLine($"wrote dvh_curves.json ({snap.DvhCurves?.Count ?? 0})");
+     if (snap.Dose != null)
+    {
+     WriteGeometry(snap.Dose.Geometry, Path.Combine(outputDir, "dose_geometry.json"));
+                WriteScaling(snap.Dose.Scaling, outputDir);
+    WriteVolumeBinary(snap.Dose.Voxels, Path.Combine(outputDir, "dose_volume.bin.gz"));
+   var g = snap.Dose.Geometry;
+        sb.AppendLine($"wrote dose_volume.bin.gz ({g.XSize}x{g.YSize}x{g.ZSize})");
+   }
 
-            WriteRegistrations(snap.Registrations, outputDir);
-      sb.AppendLine($"wrote registrations.json ({snap.Registrations?.Count ?? 0})");
+   WriteStructures(snap.Structures, outputDir);
+            sb.AppendLine($"wrote structures.json ({snap.Structures?.Count ?? 0})");
 
-     WriteCourses(snap.AllCourses, outputDir);
+          WriteDvhCurves(snap.DvhCurves, outputDir);
+            sb.AppendLine($"wrote dvh_curves.json ({snap.DvhCurves?.Count ?? 0})");
+
+      WriteRegistrations(snap.Registrations, outputDir);
+            sb.AppendLine($"wrote registrations.json ({snap.Registrations?.Count ?? 0})");
+
+            WriteCourses(snap.AllCourses, outputDir);
        sb.AppendLine($"wrote courses.json ({snap.AllCourses?.Count ?? 0})");
 
-       return sb.ToString();
+            if (snap.RenderSettings != null)
+   {
+   WriteRenderSettings(snap.RenderSettings, outputDir);
+         sb.AppendLine($"wrote render_settings.json ({snap.RenderSettings.ReferenceDosePoints?.Count ?? 0} ref points)");
+            }
+
+    return sb.ToString();
    }
 
       /// <summary>
@@ -354,7 +370,11 @@ if (File.Exists(doseGeoPath) && File.Exists(doseBinPath))
             if (File.Exists(coursesPath))
                 snap.AllCourses = ReadCourses(ReadJson(coursesPath));
 
-  return snap;
+            string renderPath = Path.Combine(dir, "render_settings.json");
+    if (File.Exists(renderPath))
+     snap.RenderSettings = ReadRenderSettings(ReadJson(renderPath));
+
+            return snap;
      }
 
         // ????????????????????????????????????????????????????????
@@ -641,8 +661,108 @@ first = false;
      }
 
      // ????????????????????????????????????????????????????????
+        // RENDER SETTINGS I/O
+  // ????????????????????????????????????????????????????????
+
+        private static void WriteRenderSettings(RenderSettings settings, string dir)
+        {
+            var sb = new StringBuilder();
+       sb.Append("{");
+   sb.Append($"\"windowLevel\":{F(settings.WindowLevel)},");
+            sb.Append($"\"windowWidth\":{F(settings.WindowWidth)}");
+
+   if (settings.IsodoseLevels != null && settings.IsodoseLevels.Count > 0)
+         {
+      sb.Append(",\"isodoseLevels\":[");
+     for (int i = 0; i < settings.IsodoseLevels.Count; i++)
+      {
+         if (i > 0) sb.Append(",");
+      var l = settings.IsodoseLevels[i];
+   sb.Append($"{{\"fraction\":{F(l.Fraction)},\"absoluteDoseGy\":{F(l.AbsoluteDoseGy)},");
+               sb.Append($"\"color\":{l.Color},\"isVisible\":{Bool(l.IsVisible)}}}");
+     }
+       sb.Append("]");
+            }
+
+if (settings.ReferenceDosePoints != null && settings.ReferenceDosePoints.Count > 0)
+  {
+         sb.Append(",\"referenceDosePoints\":[");
+      for (int i = 0; i < settings.ReferenceDosePoints.Count; i++)
+        {
+         if (i > 0) sb.Append(",");
+      var p = settings.ReferenceDosePoints[i];
+    sb.Append($"{{\"ctPixelX\":{p.CtPixelX},\"ctPixelY\":{p.CtPixelY},");
+      sb.Append($"\"ctSlice\":{p.CtSlice},\"expectedDoseGy\":{F(p.ExpectedDoseGy)},");
+        sb.Append($"\"isInsideDoseGrid\":{Bool(p.IsInsideDoseGrid)}}}");
+        }
+     sb.Append("]");
+          }
+
+     sb.Append("}");
+            WriteJson(Path.Combine(dir, "render_settings.json"), sb.ToString());
+        }
+
+        private static RenderSettings ReadRenderSettings(string json)
+        {
+       var rs = new RenderSettings
+            {
+      WindowLevel = ExtractDouble(json, "windowLevel"),
+  WindowWidth = ExtractDouble(json, "windowWidth")
+       };
+
+       // Parse isodose levels
+       int isoStart = json.IndexOf("\"isodoseLevels\":[", StringComparison.Ordinal);
+          if (isoStart >= 0)
+            {
+        int arrStart = json.IndexOf('[', isoStart + 16);
+    int arrEnd = FindMatchingBracket(json, arrStart, '[', ']');
+         if (arrEnd > arrStart)
+          {
+        rs.IsodoseLevels = new List<IsodoseLevelSetting>();
+ var items = SplitTopLevelObjects(json.Substring(arrStart, arrEnd - arrStart + 1));
+         foreach (var item in items)
+    {
+ rs.IsodoseLevels.Add(new IsodoseLevelSetting
+             {
+            Fraction = ExtractDouble(item, "fraction"),
+      AbsoluteDoseGy = ExtractDouble(item, "absoluteDoseGy"),
+ Color = (uint)ExtractDouble(item, "color"),
+         IsVisible = ExtractBool(item, "isVisible")
+  });
+ }
+      }
+     }
+
+ // Parse reference dose points
+            int refStart = json.IndexOf("\"referenceDosePoints\":[", StringComparison.Ordinal);
+            if (refStart >= 0)
+ {
+     int arrStart = json.IndexOf('[', refStart + 22);
+     int arrEnd = FindMatchingBracket(json, arrStart, '[', ']');
+ if (arrEnd > arrStart)
+  {
+        rs.ReferenceDosePoints = new List<ReferenceDosePoint>();
+     var items = SplitTopLevelObjects(json.Substring(arrStart, arrEnd - arrStart + 1));
+          foreach (var item in items)
+       {
+           rs.ReferenceDosePoints.Add(new ReferenceDosePoint
+         {
+       CtPixelX = (int)ExtractDouble(item, "ctPixelX"),
+         CtPixelY = (int)ExtractDouble(item, "ctPixelY"),
+        CtSlice = (int)ExtractDouble(item, "ctSlice"),
+           ExpectedDoseGy = ExtractDouble(item, "expectedDoseGy"),
+    IsInsideDoseGrid = ExtractBool(item, "isInsideDoseGrid")
+    });
+             }
+           }
+            }
+
+            return rs;
+        }
+
+// ????????????????????????????????????????????????????????
         // RLE VOXEL SERIALIZATION
-        // ????????????????????????????????????????????????????????
+ // ????????????????????????????????????????????????????????
 
         /// <summary>
         /// Serializes a 2D voxel slice with run-length encoding.
@@ -988,41 +1108,41 @@ int pos = 1;
 
   private static List<CourseData> ReadCourses(string json)
         {
-  var result = new List<CourseData>();
-            var items = SplitTopLevelObjects(json);
-        foreach (var item in items)
-            {
-        var cd = new CourseData { Id = ExtractString(item, "id") };
+   var result = new List<CourseData>();
+var items = SplitTopLevelObjects(json);
+   foreach (var item in items)
+{
+         var cd = new CourseData { Id = ExtractString(item, "id") };
 
-          int plansStart = item.IndexOf("\"plans\":[", StringComparison.Ordinal);
-        if (plansStart >= 0)
- {
-        int arrStart = item.IndexOf('[', plansStart + 8);
-        int arrEnd = FindMatchingBracket(item, arrStart, '[', ']');
-        if (arrEnd > arrStart)
-       {
-      string plansJson = item.Substring(arrStart, arrEnd - arrStart + 1);
-     var planItems = SplitTopLevelObjects(plansJson);
-    foreach (var pi in planItems)
- {
-         cd.Plans.Add(new PlanSummaryData
-   {
-       PlanId = ExtractString(pi, "planId"),
-     CourseId = ExtractString(pi, "courseId"),
-        ImageId = ExtractString(pi, "imageId"),
-             ImageFOR = ExtractString(pi, "imageFOR"),
- TotalDoseGy = ExtractDouble(pi, "totalDoseGy"),
-        NumberOfFractions = (int)ExtractDouble(pi, "numberOfFractions"),
-               PlanNormalization = ExtractDouble(pi, "planNormalization"),
-  HasDose = ExtractBool(pi, "hasDose")
-      });
-       }
-       }
-       }
-       result.Add(cd);
+         int plansStart = item.IndexOf("\"plans\":[", StringComparison.Ordinal);
+         if (plansStart >= 0)
+  {
+  int arrStart = item.IndexOf('[', plansStart + 8);
+         int arrEnd = FindMatchingBracket(item, arrStart, '[', ']');
+      if (arrEnd > arrStart)
+      {
+       string plansJson = item.Substring(arrStart, arrEnd - arrStart + 1);
+      var planItems = SplitTopLevelObjects(plansJson);
+     foreach (var pi in planItems)
+  {
+    cd.Plans.Add(new PlanSummaryData
+    {
+  PlanId = ExtractString(pi, "planId"),
+       CourseId = ExtractString(pi, "courseId"),
+    ImageId = ExtractString(pi, "imageId"),
+       ImageFOR = ExtractString(pi, "imageFOR"),
+   TotalDoseGy = ExtractDouble(pi, "totalDoseGy"),
+   NumberOfFractions = (int)ExtractDouble(pi, "numberOfFractions"),
+             PlanNormalization = ExtractDouble(pi, "planNormalization"),
+    HasDose = ExtractBool(pi, "hasDose")
+});
+          }
+         }
+         }
+ result.Add(cd);
     }
          return result;
-        }
+      }
 
         // ????????????????????????????????????????????????????????
         // MINI JSON PRIMITIVES

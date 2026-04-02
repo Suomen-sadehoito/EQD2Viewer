@@ -67,7 +67,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="AppLauncher.cs" />
-<Compile Include="Rendering\Interfaces\IImageRenderingService.cs" />
+    <Compile Include="Rendering\Interfaces\IImageRenderingService.cs" />
     <Compile Include="Rendering\Models\IsodoseContourData.cs" />
     <Compile Include="Rendering\Models\IsodoseLevel.cs" />
     <Compile Include="Rendering\Models\StructureContourData.cs" />
@@ -76,6 +76,7 @@
     <Compile Include="Services\ExportService.cs" />
     <Compile Include="Services\ImageRenderingService.cs" />
     <Compile Include="Services\SummationService.cs" />
+    <Compile Include="Services\SummationServiceFactory.cs" />
     <Compile Include="UI\Controls\InteractiveImageViewer.xaml.cs">
       <DependentUpon>InteractiveImageViewer.xaml</DependentUpon>
     </Compile>

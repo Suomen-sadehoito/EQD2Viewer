@@ -51,6 +51,12 @@ namespace ESAPI_EQD2Viewer.UI.ViewModels
         /// </summary>
         internal readonly ISummationDataLoader _summationDataLoader;
 
+        /// <summary>
+        /// Factory for creating per-session summation service instances.
+        /// Null when summation is not available.
+        /// </summary>
+        internal readonly ISummationServiceFactory _summationServiceFactory;
+
         // ── Child ViewModels (decomposed responsibilities) ──
         internal readonly ViewModelEventBus _eventBus = new ViewModelEventBus();
         internal readonly DoseOverlayViewModel _doseOverlay;
@@ -66,13 +72,15 @@ namespace ESAPI_EQD2Viewer.UI.ViewModels
             IImageRenderingService renderingService,
             IDebugExportService debugExportService,
             IDVHCalculation dvhService,
-            ISummationDataLoader summationDataLoader = null)
+            ISummationDataLoader summationDataLoader = null,
+            ISummationServiceFactory summationServiceFactory = null)
         {
             _snapshot = snapshot ?? throw new ArgumentNullException(nameof(snapshot));
             _renderingService = renderingService ?? throw new ArgumentNullException(nameof(renderingService));
             _debugExportService = debugExportService ?? throw new ArgumentNullException(nameof(debugExportService));
             _dvhService = dvhService ?? throw new ArgumentNullException(nameof(dvhService));
             _summationDataLoader = summationDataLoader;
+            _summationServiceFactory = summationServiceFactory;
 
             // ── Initialize child ViewModels ──
             double prescGy = snapshot.ActivePlan?.TotalDoseGy ?? 0;

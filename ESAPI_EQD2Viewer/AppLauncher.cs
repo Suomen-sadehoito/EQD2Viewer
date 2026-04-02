@@ -58,7 +58,8 @@ if (snapshot == null) throw new ArgumentNullException(nameof(snapshot));
       renderingService,
  debugService,
             dvhService,
-                summationLoader);
+        summationLoader,
+                summationLoader != null ? new SummationServiceFactory() : null);
 
       // — Launch window —
          var window = new MainWindow(viewModel);
