@@ -40,16 +40,16 @@ MessageBoxImage.Warning);
      {
         SimpleLogger.EnableFileLogging();
 
-    // — Load the full clinical snapshot via the ESAPI adapter layer —
+    // ï¿½ Load the full clinical snapshot via the ESAPI adapter layer ï¿½
               var dataSource = new EQD2Viewer.Esapi.Adapters.EsapiDataSource(context);
    var snapshot = dataSource.LoadSnapshot();
 
- // — Create the ESAPI summation data loader for on-demand plan loading —
+ // ï¿½ Create the ESAPI summation data loader for on-demand plan loading ï¿½
  ISummationDataLoader summationLoader =
  new EQD2Viewer.Esapi.Adapters.EsapiSummationDataLoader(context.Patient);
 
- // — Launch the UI via the composition root (no direct WPF type references here) —
-    ESAPI_EQD2Viewer.AppLauncher.Launch(
+ // ï¿½ Launch the UI via the composition root (no direct WPF type references here) ï¿½
+    EQD2Viewer.App.AppLauncher.Launch(
            snapshot,
     summationLoader,
    windowTitle: null,
