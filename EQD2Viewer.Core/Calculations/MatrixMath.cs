@@ -14,7 +14,7 @@ namespace EQD2Viewer.Core.Calculations
         /// If the rotation part is not orthogonal (affine/deformable), 
         /// falls back to general Gauss-Jordan elimination.
         /// </summary>
-        public static double[,] Invert4x4(double[,] M)
+        public static double[,]? Invert4x4(double[,]? M)
         {
             if (M == null) return null;
 
@@ -89,7 +89,7 @@ namespace EQD2Viewer.Core.Calculations
         /// Works for any invertible matrix including affine transforms with scaling/shear.
         /// Returns null if matrix is singular (determinant â‰ˆ 0).
         /// </summary>
-        private static double[,] InvertGaussJordan(double[,] M)
+        private static double[,]? InvertGaussJordan(double[,] M)
         {
             // Augmented matrix [M | I]
             double[,] aug = new double[4, 8];

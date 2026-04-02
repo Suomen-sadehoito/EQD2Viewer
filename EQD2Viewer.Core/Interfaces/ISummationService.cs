@@ -73,7 +73,7 @@ namespace EQD2Viewer.Core.Interfaces
     public class SummationResult
     {
         public bool Success { get; set; }
-public string StatusMessage { get; set; }
+public string StatusMessage { get; set; } = "";
         public double MaxDoseGy { get; set; }
         public double TotalReferenceDoseGy { get; set; }
     public int SliceCount { get; set; }

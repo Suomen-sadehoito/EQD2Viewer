@@ -15,14 +15,14 @@ namespace EQD2Viewer.Core.Models
 
     public class SummationPlanEntry
     {
-        public string DisplayLabel { get; set; }
-        public string CourseId { get; set; }
-        public string PlanId { get; set; }
+        public string DisplayLabel { get; set; } = "";
+        public string CourseId { get; set; } = "";
+        public string PlanId { get; set; } = "";
         public int NumberOfFractions { get; set; } = 1;
         public double TotalDoseGy { get; set; }
         public double PlanNormalization { get; set; } = 100.0;
         public bool IsReference { get; set; }
-        public string RegistrationId { get; set; }
+        public string RegistrationId { get; set; } = "";
         public double Weight { get; set; } = 1.0;
     }
 

@@ -45,13 +45,13 @@ namespace EQD2Viewer.Core.Interfaces
     /// </summary>
     public class SummationPlanDoseData
     {
-        public int[][,] DoseVoxels { get; set; }
-        public VolumeGeometry DoseGeometry { get; set; }
-        public DoseScaling Scaling { get; set; }
+        public int[][,] DoseVoxels { get; set; } = null!;
+        public VolumeGeometry DoseGeometry { get; set; } = null!;
+        public DoseScaling Scaling { get; set; } = null!;
 
         /// <summary>
         /// Optional CT image for overlay (only populated for non-reference plans).
         /// </summary>
-        public VolumeData CtImage { get; set; }
+        public VolumeData? CtImage { get; set; }
     }
 }

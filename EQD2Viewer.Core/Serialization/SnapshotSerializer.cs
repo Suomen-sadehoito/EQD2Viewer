@@ -943,12 +943,12 @@ while (pos < rleContent.Length)
   start += "\"contoursBySlice\":{".Length - 1; // position at '{'
 
         // Extract the contoursBySlice object body
-   string body = ExtractObjectBody(structJson, start);
+   string? body = ExtractObjectBody(structJson, start);
    if (string.IsNullOrEmpty(body)) return result;
 
-        // Parse: "sliceIndex": [[points], ...]
-            int pos = 0;
-            while (pos < body.Length)
+ // Parse: "sliceIndex": [[points], ...]
+        int pos = 0;
+     while (pos < body!.Length)
        {
      int keyStart = body.IndexOf('"', pos);
    if (keyStart < 0) break;
@@ -1027,7 +1027,7 @@ int pos = 1;
             {
         // Parse curve array [[d,v],...]
      int curveStart = item.IndexOf("\"curve\":[", StringComparison.Ordinal);
-     double[][] curve = null;
+     double[][]? curve = null;
     if (curveStart >= 0)
            {
  int arrStart = item.IndexOf('[', curveStart + 8);
@@ -1074,7 +1074,7 @@ int pos = 1;
             var items = SplitTopLevelObjects(json);
    foreach (var item in items)
  {
-         double[] matrix = null;
+         double[]? matrix = null;
       int mStart = item.IndexOf("\"matrix\":[", StringComparison.Ordinal);
       if (mStart >= 0)
           {
@@ -1100,7 +1100,7 @@ int pos = 1;
   SourceFOR = ExtractString(item, "sourceFOR"),
       RegisteredFOR = ExtractString(item, "registeredFOR"),
         CreationDateTime = dt,
-        Matrix = matrix
+        Matrix = matrix!
        });
        }
       return result;
@@ -1223,7 +1223,7 @@ int pos = 0;
     return result;
         }
 
-        private static string ExtractObjectBody(string json, int openBracePos)
+        private static string? ExtractObjectBody(string json, int openBracePos)
  {
          int close = FindMatchingBracket(json, openBracePos, '{', '}');
             if (close < 0) return null;

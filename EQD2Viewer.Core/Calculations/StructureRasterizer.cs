@@ -125,8 +125,8 @@ namespace EQD2Viewer.Core.Calculations
         /// <param name="yDirX">CT Y-direction X component</param>
         /// <param name="yDirY">CT Y-direction Y component</param>
         /// <returns>Points in CT pixel coordinates</returns>
-        public static Point2D[] WorldToPixel(
-            double[][] worldPoints,
+        public static Point2D[]? WorldToPixel(
+            double[][]? worldPoints,
             double imageOriginX, double imageOriginY, double imageOriginZ,
             double pixelSpacingX, double pixelSpacingY,
             double xDirX, double xDirY, double xDirZ,

@@ -92,7 +92,7 @@ namespace EQD2Viewer.DevRunner
         /// Resolves fixture directory from command line args or auto-discovery.
         /// Supports both snapshot format (snapshot_meta.json) and test fixture format (metadata.json).
         /// </summary>
-        private static string ResolveFixturePath(string[] args)
+        private static string? ResolveFixturePath(string[] args)
         {
             if (args != null && args.Length > 0 && Directory.Exists(args[0]))
     return args[0];

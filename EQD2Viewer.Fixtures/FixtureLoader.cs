@@ -96,7 +96,7 @@ namespace EQD2Viewer.Fixtures
         public static ReferenceDosePoints LoadReferenceDosePoints(string fixtureName) =>
             Load<ReferenceDosePoints>(fixtureName, "reference_dose_points.json");
 
-        public static RegistrationsFile LoadRegistrations(string fixtureName) =>
+        public static RegistrationsFile? LoadRegistrations(string fixtureName) =>
             LoadOptional<RegistrationsFile>(fixtureName, "registrations.json");
 
         /// <summary>
@@ -109,7 +109,7 @@ namespace EQD2Viewer.Fixtures
             return Directory.GetFiles(dir, "dose_slice_*.json")
                 .OrderBy(f => f)
                 .Select(f => JsonSerializer.Deserialize<DoseSlice>(
-                    ReadJsonFile(f), JsonOpts))
+                    ReadJsonFile(f), JsonOpts)!)     // <--- null-forgiving operator added
                 .ToArray();
         }
 
@@ -122,7 +122,7 @@ namespace EQD2Viewer.Fixtures
             return Directory.GetFiles(dir, "structure_*.json")
                 .OrderBy(f => f)
                 .Select(f => JsonSerializer.Deserialize<StructureFixture>(
-                    ReadJsonFile(f), JsonOpts))
+                    ReadJsonFile(f), JsonOpts)!)    // <--- null-forgiving operator added
                 .ToArray();
         }
 
@@ -135,7 +135,7 @@ namespace EQD2Viewer.Fixtures
             return Directory.GetFiles(dir, "dvh_*.json")
                 .OrderBy(f => f)
                 .Select(f => JsonSerializer.Deserialize<DvhFixture>(
-                    ReadJsonFile(f), JsonOpts))
+                    ReadJsonFile(f), JsonOpts)!)    // <--- null-forgiving operator added
                 .ToArray();
         }
 
@@ -167,7 +167,7 @@ namespace EQD2Viewer.Fixtures
         /// <summary>
         /// Converts a flat 16-element array to a 4x4 matrix.
         /// </summary>
-        public static double[,] ToMatrix4x4(double[] flat)
+        public static double[,]? ToMatrix4x4(double[]? flat)
         {
             if (flat == null || flat.Length != 16) return null;
             var m = new double[4, 4];
@@ -199,10 +199,10 @@ namespace EQD2Viewer.Fixtures
             string path = Path.Combine(FixturePath(fixtureName), fileName);
             if (!File.Exists(path))
                 throw new FileNotFoundException($"Fixture file not found: {path}");
-            return JsonSerializer.Deserialize<T>(ReadJsonFile(path), JsonOpts);
+            return JsonSerializer.Deserialize<T>(ReadJsonFile(path), JsonOpts)!;
         }
 
-        private static T LoadOptional<T>(string fixtureName, string fileName) where T : class
+        private static T? LoadOptional<T>(string fixtureName, string fileName) where T : class
         {
             string path = Path.Combine(FixturePath(fixtureName), fileName);
             if (!File.Exists(path)) return null;

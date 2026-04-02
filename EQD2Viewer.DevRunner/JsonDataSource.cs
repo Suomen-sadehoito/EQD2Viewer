@@ -91,9 +91,9 @@ namespace EQD2Viewer.DevRunner
             return snapshot;
         }
 
-        // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+        // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
         // CT IMAGE
-        // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+        // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
         private VolumeData BuildCtImage(GeometryJson geo)
         {
             int xSize = geo.xSize, ySize = geo.ySize, zSize = geo.zSize;
@@ -112,21 +112,24 @@ namespace EQD2Viewer.DevRunner
                 int midZ = zSize / 2;
                 int step = sub.subsampleStep > 0 ? sub.subsampleStep : 4;
 
-                for (int sy = 0; sy < sub.height && sy * step < ySize; sy++)
-                    for (int sx = 0; sx < sub.width && sx * step < xSize; sx++)
-                    {
-                        int val = sub.values[sy * sub.width + sx];
-
-                        for (int dy = 0; dy < step && sy * step + dy < ySize; dy++)
-                            for (int dx = 0; dx < step && sx * step + dx < xSize; dx++)
-                                voxels[midZ][sx * step + dx, sy * step + dy] = val;
-                    }
-
-                int spread = Math.Min(5, zSize / 4);
-                for (int dz = 1; dz <= spread; dz++)
+                if (sub.values != null)
                 {
-                    if (midZ + dz < zSize) Array.Copy(voxels[midZ], 0, voxels[midZ + dz], 0, xSize * ySize);
-                    if (midZ - dz >= 0) Array.Copy(voxels[midZ], 0, voxels[midZ - dz], 0, xSize * ySize);
+                    for (int sy = 0; sy < sub.height && sy * step < ySize; sy++)
+                        for (int sx = 0; sx < sub.width && sx * step < xSize; sx++)
+                        {
+                            int val = sub.values[sy * sub.width + sx];
+
+                            for (int dy = 0; dy < step && sy * step + dy < ySize; dy++)
+                                for (int dx = 0; dx < step && sx * step + dx < xSize; dx++)
+                                    voxels[midZ][sx * step + dx, sy * step + dy] = val;
+                        }
+
+                    int spread = Math.Min(5, zSize / 4);
+                    for (int dz = 1; dz <= spread; dz++)
+                    {
+                        if (midZ + dz < zSize) Array.Copy(voxels[midZ], 0, voxels[midZ + dz], 0, xSize * ySize);
+                        if (midZ - dz >= 0) Array.Copy(voxels[midZ], 0, voxels[midZ - dz], 0, xSize * ySize);
+                    }
                 }
             }
 
@@ -269,7 +272,7 @@ namespace EQD2Viewer.DevRunner
                         DMeanGy = df.dmeanGy,
                         DMinGy = df.dminGy,
                         VolumeCc = df.volumeCc,
-                        Curve = df.curve
+                        Curve = df.curve ?? Array.Empty<double[]>()
                     });
                 }
                 catch { }
@@ -291,7 +294,7 @@ namespace EQD2Viewer.DevRunner
                     SourceFOR = r.sourceFOR ?? "",
                     RegisteredFOR = r.registeredFOR ?? "",
                     CreationDateTime = DateTime.TryParse(r.date, out var dt) ? dt : null,
-                    Matrix = r.matrix
+                    Matrix = r.matrix ?? Array.Empty<double>()
                 });
             }
             return result;
@@ -305,10 +308,10 @@ namespace EQD2Viewer.DevRunner
             XRes = g.xRes,
             YRes = g.yRes,
             ZRes = g.zRes,
-            Origin = Vec3.FromArray(g.origin),
-            XDirection = Vec3.FromArray(g.xDirection),
-            YDirection = Vec3.FromArray(g.yDirection),
-            ZDirection = Vec3.FromArray(g.zDirection),
+            Origin = Vec3.FromArray(g.origin ?? Array.Empty<double>()),
+            XDirection = Vec3.FromArray(g.xDirection ?? Array.Empty<double>()),
+            YDirection = Vec3.FromArray(g.yDirection ?? Array.Empty<double>()),
+            ZDirection = Vec3.FromArray(g.zDirection ?? Array.Empty<double>()),
             FrameOfReference = g.frameOfReference ?? ""
         };
 

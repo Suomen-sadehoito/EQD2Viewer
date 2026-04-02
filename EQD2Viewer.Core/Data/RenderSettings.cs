@@ -25,13 +25,13 @@ namespace EQD2Viewer.Core.Data
   /// Each entry: { "fraction": 0.95, "absoluteGy": 0, "color": 0xFFFFFF00, "visible": true }
         /// Null if isodose settings were not captured.
         /// </summary>
-        public List<IsodoseLevelSetting> IsodoseLevels { get; set; }
+        public List<IsodoseLevelSetting> IsodoseLevels { get; set; } = new List<IsodoseLevelSetting>();
 
         /// <summary>
         /// Reference dose points with Eclipse-computed dose values.
         /// Used for numerical verification: does the app compute the same Gy at each point?
         /// </summary>
-        public List<ReferenceDosePoint> ReferenceDosePoints { get; set; }
+        public List<ReferenceDosePoint> ReferenceDosePoints { get; set; } = new List<ReferenceDosePoint>();
     }
 
     /// <summary>

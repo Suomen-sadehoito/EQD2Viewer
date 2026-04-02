@@ -13,7 +13,7 @@ namespace EQD2Viewer.Core.Logging
     public static class SimpleLogger
     {
         private static readonly object _lock = new object();
-        private static string _logFilePath;
+        private static string? _logFilePath;
         private static bool _fileLoggingEnabled;
 
         /// <summary>
@@ -47,7 +47,7 @@ namespace EQD2Viewer.Core.Logging
             Write("WARN", message);
         }
 
-        public static void Error(string message, Exception ex = null)
+        public static void Error(string message, Exception? ex = null)
         {
             string full = ex != null ? $"{message} | {ex.GetType().Name}: {ex.Message}" : message;
             Write("ERROR", full);
@@ -66,7 +66,7 @@ namespace EQD2Viewer.Core.Logging
                 {
                     try
                     {
-                        File.AppendAllText(_logFilePath, line + Environment.NewLine, Encoding.UTF8);
+                        File.AppendAllText(_logFilePath!, line + Environment.NewLine, Encoding.UTF8);
                     }
                     catch
                     {
