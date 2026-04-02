@@ -35,12 +35,13 @@ if (string.IsNullOrWhiteSpace(snapshotDir))
 
         /// <summary>
         /// Deserializes the full ClinicalSnapshot from disk.
+        /// Auto-detects JSON+RLE (v2.0) or binary (v3.0) format.
         /// Can be called from any thread (no Eclipse threading constraints).
-     /// </summary>
-   public ClinicalSnapshot LoadSnapshot()
-      {
-            return SnapshotSerializer.Read(_snapshotDir);
-        }
+        /// </summary>
+        public ClinicalSnapshot LoadSnapshot()
+     {
+     return SnapshotSerializer.ReadAuto(_snapshotDir);
+     }
 
         /// <summary>
    /// Checks whether a given directory looks like a valid snapshot directory.

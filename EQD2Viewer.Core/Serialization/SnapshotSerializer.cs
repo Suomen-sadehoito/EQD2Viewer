@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.IO.Compression;
 using System.Text;
 using EQD2Viewer.Core.Data;
 
@@ -36,19 +37,23 @@ namespace EQD2Viewer.Core.Serialization
     {
         public const string MetaFileName = "snapshot_meta.json";
         public const string FormatVersion = "2.0";
+        public const string BinaryFormatVersion = "3.0";
 
-      private static readonly Encoding UTF8NoBom = new UTF8Encoding(false);
+        private static readonly Encoding UTF8NoBom = new UTF8Encoding(false);
         private static readonly CultureInfo INV = CultureInfo.InvariantCulture;
 
         // ????????????????????????????????????????????????????????
-      // WRITE
+        // WRITE — JSON+RLE (original, kept for backward compatibility)
         // ????????????????????????????????????????????????????????
 
-      /// <summary>
+        // WRITE
+        // ????????????????????????????????????????????????????????
+
+        /// <summary>
         /// Serializes the entire snapshot to <paramref name="outputDir"/>.
         /// The directory is created if it does not exist.
-     /// Returns a human-readable export summary.
-      /// </summary>
+        /// Returns a human-readable export summary.
+        /// </summary>
         public static string Write(ClinicalSnapshot snap, string outputDir)
         {
         Directory.CreateDirectory(outputDir);
@@ -114,103 +119,320 @@ sb.AppendLine("? patient.json");
       }
 
         // ????????????????????????????????????????????????????????
-        // READ
+        // READ — JSON+RLE (original v2.0 format)
         // ????????????????????????????????????????????????????????
 
         /// <summary>
-        /// Deserializes a ClinicalSnapshot from a directory written by <see cref="Write"/>.
-        /// Throws <see cref="InvalidOperationException"/> if the format version is incompatible.
-        /// </summary>
+        /// Deserializes a ClinicalSnapshot from a directory written by <see cref="Write"/> (v2.0 format).
+     /// </summary>
         public static ClinicalSnapshot Read(string dir)
-     {
-   // Validate version
-      string metaPath = Path.Combine(dir, MetaFileName);
-     if (!File.Exists(metaPath))
+        {
+         string metaPath = Path.Combine(dir, MetaFileName);
+          if (!File.Exists(metaPath))
        throw new FileNotFoundException($"snapshot_meta.json not found in: {dir}");
 
- string metaJson = ReadJson(metaPath);
-         string version = ExtractString(metaJson, "formatVersion");
-          if (version != FormatVersion)
-           throw new InvalidOperationException(
-      $"Snapshot format version mismatch: got '{version}', expected '{FormatVersion}'. " +
+   string metaJson = ReadJson(metaPath);
+            string version = ExtractString(metaJson, "formatVersion");
+   if (version != FormatVersion)
+     throw new InvalidOperationException(
+    $"Snapshot format version mismatch: got '{version}', expected '{FormatVersion}'. " +
            "Re-export the snapshot with the current FixtureGenerator.");
 
             var snap = new ClinicalSnapshot();
 
-      // Patient
- string patientPath = Path.Combine(dir, "patient.json");
-    if (File.Exists(patientPath))
-            snap.Patient = ReadPatient(ReadJson(patientPath));
+     string patientPath = Path.Combine(dir, "patient.json");
+            if (File.Exists(patientPath))
+ snap.Patient = ReadPatient(ReadJson(patientPath));
 
-         // Plan
-      string planPath = Path.Combine(dir, "plan.json");
-            if (File.Exists(planPath))
-     snap.ActivePlan = ReadPlan(ReadJson(planPath));
+         string planPath = Path.Combine(dir, "plan.json");
+ if (File.Exists(planPath))
+         snap.ActivePlan = ReadPlan(ReadJson(planPath));
 
-     // CT
-        string ctGeoPath = Path.Combine(dir, "ct_geometry.json");
-            if (File.Exists(ctGeoPath))
-       {
-   var ctGeo = ReadGeometry(ReadJson(ctGeoPath));
-    var ctVoxels = ReadVoxelSlices("ct_voxels_", dir, ctGeo.ZSize);
-   int huOffset = 0;
-            string huPath = Path.Combine(dir, "ct_huoffset.json");
-      if (File.Exists(huPath))
+            string ctGeoPath = Path.Combine(dir, "ct_geometry.json");
+       if (File.Exists(ctGeoPath))
+            {
+       var ctGeo = ReadGeometry(ReadJson(ctGeoPath));
+       var ctVoxels = ReadVoxelSlices("ct_voxels_", dir, ctGeo.ZSize);
+          int huOffset = 0;
+       string huPath = Path.Combine(dir, "ct_huoffset.json");
+                if (File.Exists(huPath))
       huOffset = (int)ExtractDouble(ReadJson(huPath), "huOffset");
 
-snap.CtImage = new VolumeData
-          {
-        Geometry = ctGeo,
-       Voxels = ctVoxels,
+                snap.CtImage = new VolumeData
+       {
+       Geometry = ctGeo,
+         Voxels = ctVoxels,
           HuOffset = huOffset
+      };
+     }
+
+            string doseGeoPath = Path.Combine(dir, "dose_geometry.json");
+            if (File.Exists(doseGeoPath))
+          {
+      var doseGeo = ReadGeometry(ReadJson(doseGeoPath));
+      string scalingPath = Path.Combine(dir, "dose_scaling.json");
+         var scaling = File.Exists(scalingPath)
+      ? ReadScaling(ReadJson(scalingPath))
+          : new DoseScaling();
+    var doseVoxels = ReadVoxelSlices("dose_voxels_", dir, doseGeo.ZSize);
+
+        snap.Dose = new DoseVolumeData
+       {
+          Geometry = doseGeo,
+      Voxels = doseVoxels,
+   Scaling = scaling
     };
             }
 
- // Dose
-            string doseGeoPath = Path.Combine(dir, "dose_geometry.json");
-     if (File.Exists(doseGeoPath))
-         {
-        var doseGeo = ReadGeometry(ReadJson(doseGeoPath));
-     string scalingPath = Path.Combine(dir, "dose_scaling.json");
-            var scaling = File.Exists(scalingPath)
-     ? ReadScaling(ReadJson(scalingPath))
-       : new DoseScaling();
-var doseVoxels = ReadVoxelSlices("dose_voxels_", dir, doseGeo.ZSize);
+          string structPath = Path.Combine(dir, "structures.json");
+            if (File.Exists(structPath))
+       snap.Structures = ReadStructures(ReadJson(structPath));
 
-    snap.Dose = new DoseVolumeData
-    {
-           Geometry = doseGeo,
-           Voxels = doseVoxels,
-        Scaling = scaling
-  };
-      }
+     string dvhPath = Path.Combine(dir, "dvh_curves.json");
+          if (File.Exists(dvhPath))
+       snap.DvhCurves = ReadDvhCurves(ReadJson(dvhPath));
 
-       // Structures
-            string structPath = Path.Combine(dir, "structures.json");
-          if (File.Exists(structPath))
-        snap.Structures = ReadStructures(ReadJson(structPath));
-
-          // DVH
-string dvhPath = Path.Combine(dir, "dvh_curves.json");
-            if (File.Exists(dvhPath))
-        snap.DvhCurves = ReadDvhCurves(ReadJson(dvhPath));
-
-        // Registrations
     string regPath = Path.Combine(dir, "registrations.json");
-         if (File.Exists(regPath))
-    snap.Registrations = ReadRegistrations(ReadJson(regPath));
+   if (File.Exists(regPath))
+      snap.Registrations = ReadRegistrations(ReadJson(regPath));
 
-// Courses
-  string coursesPath = Path.Combine(dir, "courses.json");
-if (File.Exists(coursesPath))
-      snap.AllCourses = ReadCourses(ReadJson(coursesPath));
+            string coursesPath = Path.Combine(dir, "courses.json");
+            if (File.Exists(coursesPath))
+   snap.AllCourses = ReadCourses(ReadJson(coursesPath));
 
             return snap;
         }
 
-  // ????????????????????????????????????????????????????????
- // WRITE HELPERS
         // ????????????????????????????????????????????????????????
+        // WRITE — Binary GZip volumes (for full end-to-end snapshots)
+        // ????????????????????????????????????????????????????????
+
+      /// <summary>
+     /// Serializes the entire snapshot using GZip-compressed binary for volume data.
+        /// CT and dose voxels are stored as .bin.gz files instead of per-slice JSON.
+        /// </summary>
+      public static string WriteBinary(ClinicalSnapshot snap, string outputDir)
+   {
+  Directory.CreateDirectory(outputDir);
+            var sb = new StringBuilder();
+
+            WriteBinaryMeta(snap, outputDir);
+            sb.AppendLine("wrote snapshot_meta.json (binary v3.0)");
+
+       WritePatient(snap.Patient, outputDir);
+     sb.AppendLine("wrote patient.json");
+
+          if (snap.ActivePlan != null)
+            {
+         WritePlan(snap.ActivePlan, outputDir);
+             sb.AppendLine("wrote plan.json");
+      }
+
+            if (snap.CtImage != null)
+     {
+         WriteGeometry(snap.CtImage.Geometry, Path.Combine(outputDir, "ct_geometry.json"));
+    WriteJson(Path.Combine(outputDir, "ct_huoffset.json"),
+            $"{{\"huOffset\":{snap.CtImage.HuOffset}}}");
+     WriteVolumeBinary(snap.CtImage.Voxels, Path.Combine(outputDir, "ct_volume.bin.gz"));
+                var g = snap.CtImage.Geometry;
+           sb.AppendLine($"wrote ct_volume.bin.gz ({g.XSize}x{g.YSize}x{g.ZSize})");
+            }
+
+        if (snap.Dose != null)
+      {
+                WriteGeometry(snap.Dose.Geometry, Path.Combine(outputDir, "dose_geometry.json"));
+        WriteScaling(snap.Dose.Scaling, outputDir);
+   WriteVolumeBinary(snap.Dose.Voxels, Path.Combine(outputDir, "dose_volume.bin.gz"));
+      var g = snap.Dose.Geometry;
+   sb.AppendLine($"wrote dose_volume.bin.gz ({g.XSize}x{g.YSize}x{g.ZSize})");
+     }
+
+        WriteStructures(snap.Structures, outputDir);
+      sb.AppendLine($"wrote structures.json ({snap.Structures?.Count ?? 0})");
+
+            WriteDvhCurves(snap.DvhCurves, outputDir);
+   sb.AppendLine($"wrote dvh_curves.json ({snap.DvhCurves?.Count ?? 0})");
+
+            WriteRegistrations(snap.Registrations, outputDir);
+      sb.AppendLine($"wrote registrations.json ({snap.Registrations?.Count ?? 0})");
+
+     WriteCourses(snap.AllCourses, outputDir);
+       sb.AppendLine($"wrote courses.json ({snap.AllCourses?.Count ?? 0})");
+
+       return sb.ToString();
+   }
+
+      /// <summary>
+   /// Reads a snapshot from a directory, auto-detecting binary (v3.0) vs JSON+RLE (v2.0) format.
+        /// </summary>
+    public static ClinicalSnapshot ReadAuto(string dir)
+        {
+            string metaPath = Path.Combine(dir, MetaFileName);
+     if (!File.Exists(metaPath))
+              throw new FileNotFoundException($"snapshot_meta.json not found in: {dir}");
+
+            string metaJson = ReadJson(metaPath);
+      string version = ExtractString(metaJson, "formatVersion");
+
+            if (version == BinaryFormatVersion)
+      return ReadBinary(dir);
+   if (version == FormatVersion)
+    return Read(dir);
+
+            throw new InvalidOperationException(
+                $"Unsupported snapshot format version '{version}'. Expected '{FormatVersion}' or '{BinaryFormatVersion}'.");
+        }
+
+      /// <summary>
+  /// Reads a binary-format (v3.0) snapshot directory.
+  /// </summary>
+        public static ClinicalSnapshot ReadBinary(string dir)
+   {
+            string metaPath = Path.Combine(dir, MetaFileName);
+        if (!File.Exists(metaPath))
+              throw new FileNotFoundException($"snapshot_meta.json not found in: {dir}");
+
+  var snap = new ClinicalSnapshot();
+
+       string patientPath = Path.Combine(dir, "patient.json");
+     if (File.Exists(patientPath))
+    snap.Patient = ReadPatient(ReadJson(patientPath));
+
+         string planPath = Path.Combine(dir, "plan.json");
+            if (File.Exists(planPath))
+  snap.ActivePlan = ReadPlan(ReadJson(planPath));
+
+            string ctGeoPath = Path.Combine(dir, "ct_geometry.json");
+         string ctBinPath = Path.Combine(dir, "ct_volume.bin.gz");
+     if (File.Exists(ctGeoPath) && File.Exists(ctBinPath))
+            {
+       var ctGeo = ReadGeometry(ReadJson(ctGeoPath));
+            int huOffset = 0;
+     string huPath = Path.Combine(dir, "ct_huoffset.json");
+      if (File.Exists(huPath))
+ huOffset = (int)ExtractDouble(ReadJson(huPath), "huOffset");
+
+         snap.CtImage = new VolumeData
+  {
+                    Geometry = ctGeo,
+      Voxels = ReadVolumeBinary(ctBinPath),
+       HuOffset = huOffset
+ };
+            }
+
+       string doseGeoPath = Path.Combine(dir, "dose_geometry.json");
+          string doseBinPath = Path.Combine(dir, "dose_volume.bin.gz");
+if (File.Exists(doseGeoPath) && File.Exists(doseBinPath))
+            {
+        var doseGeo = ReadGeometry(ReadJson(doseGeoPath));
+  string scalingPath = Path.Combine(dir, "dose_scaling.json");
+          var scaling = File.Exists(scalingPath)
+              ? ReadScaling(ReadJson(scalingPath))
+          : new DoseScaling();
+
+       snap.Dose = new DoseVolumeData
+       {
+         Geometry = doseGeo,
+        Voxels = ReadVolumeBinary(doseBinPath),
+           Scaling = scaling
+       };
+  }
+
+            string structPath = Path.Combine(dir, "structures.json");
+            if (File.Exists(structPath))
+           snap.Structures = ReadStructures(ReadJson(structPath));
+
+        string dvhPath = Path.Combine(dir, "dvh_curves.json");
+      if (File.Exists(dvhPath))
+   snap.DvhCurves = ReadDvhCurves(ReadJson(dvhPath));
+
+       string regPath = Path.Combine(dir, "registrations.json");
+         if (File.Exists(regPath))
+           snap.Registrations = ReadRegistrations(ReadJson(regPath));
+
+            string coursesPath = Path.Combine(dir, "courses.json");
+            if (File.Exists(coursesPath))
+                snap.AllCourses = ReadCourses(ReadJson(coursesPath));
+
+  return snap;
+     }
+
+        // ????????????????????????????????????????????????????????
+     // BINARY VOLUME I/O
+        // ????????????????????????????????????????????????????????
+
+        /// <summary>
+/// Writes a 3D voxel volume as a GZip-compressed binary file.
+        /// Header: xSize(int32), ySize(int32), zSize(int32)
+  /// Body: z outer, y middle, x inner (row-major per slice).
+        /// </summary>
+        public static void WriteVolumeBinary(int[][,] voxels, string path)
+        {
+    if (voxels == null || voxels.Length == 0) return;
+
+   int xSize = voxels[0].GetLength(0);
+int ySize = voxels[0].GetLength(1);
+            int zSize = voxels.Length;
+
+   using (var fs = File.Create(path))
+            using (var gz = new GZipStream(fs, CompressionLevel.Fastest))
+  using (var bw = new BinaryWriter(gz))
+  {
+       bw.Write(xSize);
+              bw.Write(ySize);
+     bw.Write(zSize);
+
+    for (int z = 0; z < zSize; z++)
+             {
+      var slice = voxels[z];
+     for (int y = 0; y < ySize; y++)
+    for (int x = 0; x < xSize; x++)
+                bw.Write(slice[x, y]);
+         }
+   }
+ }
+
+    /// <summary>
+        /// Reads a 3D voxel volume from a GZip-compressed binary file.
+        /// </summary>
+        public static int[][,] ReadVolumeBinary(string path)
+     {
+      using (var fs = File.OpenRead(path))
+            using (var gz = new GZipStream(fs, CompressionMode.Decompress))
+      using (var br = new BinaryReader(gz))
+         {
+        int xSize = br.ReadInt32();
+          int ySize = br.ReadInt32();
+                int zSize = br.ReadInt32();
+
+                var voxels = new int[zSize][,];
+for (int z = 0; z < zSize; z++)
+        {
+           voxels[z] = new int[xSize, ySize];
+ for (int y = 0; y < ySize; y++)
+         for (int x = 0; x < xSize; x++)
+                   voxels[z][x, y] = br.ReadInt32();
+   }
+         return voxels;
+          }
+        }
+
+        private static void WriteBinaryMeta(ClinicalSnapshot snap, string dir)
+        {
+      var w = new JW();
+            w.OB();
+ w.S("formatVersion", BinaryFormatVersion);
+       w.S("exportedAt", DateTime.Now.ToString("o"));
+    w.S("patientId", snap.Patient?.Id ?? "");
+            w.S("planId", snap.ActivePlan?.Id ?? "");
+  w.S("courseId", snap.ActivePlan?.CourseId ?? "");
+        w.EB();
+    WriteJson(Path.Combine(dir, MetaFileName), w.Build());
+     }
+
+        // ????????????????????????????????????????????????????????
+        // WRITE HELPERS
+   // ????????????????????????????????????????????????????????
 
 private static void WriteMeta(ClinicalSnapshot snap, string dir)
         {
