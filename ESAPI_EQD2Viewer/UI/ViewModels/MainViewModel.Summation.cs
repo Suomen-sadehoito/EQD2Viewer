@@ -4,6 +4,7 @@ using EQD2Viewer.Core.Data;
 using EQD2Viewer.Core.Interfaces;
 using EQD2Viewer.Core.Logging;
 using EQD2Viewer.Core.Models;
+using ESAPI_EQD2Viewer.Rendering;
 using ESAPI_EQD2Viewer.Services;
 using ESAPI_EQD2Viewer.UI.Views;
 using OxyPlot;

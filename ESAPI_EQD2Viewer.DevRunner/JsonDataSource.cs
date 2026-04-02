@@ -11,10 +11,12 @@ using EQD2Viewer.Core.Interfaces;
 namespace ESAPI_EQD2Viewer.DevRunner
 {
     /// <summary>
-    /// Development IClinicalDataSource: loads clinical data from JSON fixture files.
-    /// Enables running the full EQD2 Viewer UI without Eclipse.
+    /// IClinicalDataSource that reads the test-fixture format (metadata.json + dose slices).
+    /// 
+    /// This format is produced by FixtureExporter and contains selective data for testing.
+    /// For full snapshot data (from SnapshotSerializer), use EQD2Viewer.Fixtures.JsonDataSource.
     /// </summary>
-    public class JsonDataSource : IClinicalDataSource
+    public class FixtureFormatDataSource : IClinicalDataSource
     {
         private readonly string _fixtureDir;
 
@@ -25,7 +27,7 @@ namespace ESAPI_EQD2Viewer.DevRunner
             AllowTrailingCommas = true
         };
 
-        public JsonDataSource(string fixtureDirectory)
+        public FixtureFormatDataSource(string fixtureDirectory)
         {
             if (!Directory.Exists(fixtureDirectory))
                 throw new DirectoryNotFoundException($"Fixture directory not found: {fixtureDirectory}");
@@ -89,9 +91,9 @@ namespace ESAPI_EQD2Viewer.DevRunner
             return snapshot;
         }
 
-        // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+        // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
         // CT IMAGE
-        // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+        // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
         private VolumeData BuildCtImage(GeometryJson geo)
         {
             int xSize = geo.xSize, ySize = geo.ySize, zSize = geo.zSize;

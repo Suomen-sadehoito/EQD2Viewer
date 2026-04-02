@@ -3,6 +3,7 @@ using FluentAssertions;
 using EQD2Viewer.Core.Data;
 using EQD2Viewer.Core.Models;
 using EQD2Viewer.Core.Serialization;
+using ESAPI_EQD2Viewer.Rendering;
 using ESAPI_EQD2Viewer.Services;
 using System;
 using System.IO;

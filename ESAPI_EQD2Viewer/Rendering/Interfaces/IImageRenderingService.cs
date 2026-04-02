@@ -4,8 +4,18 @@ using System.Windows.Media.Imaging;
 using EQD2Viewer.Core.Data;
 using EQD2Viewer.Core.Models;
 
-namespace EQD2Viewer.Core.Interfaces
+namespace ESAPI_EQD2Viewer.Rendering
 {
+    /// <summary>
+    /// WPF-specific rendering service interface.
+    /// Operates on WriteableBitmap and produces WPF StreamGeometry contours.
+    /// 
+    /// This interface lives in the WPF layer, not in EQD2Viewer.Core,
+    /// because it depends on WPF types (WriteableBitmap, StreamGeometry).
+    /// 
+    /// All data inputs come from Core types (VolumeData, DoseVolumeData, etc.)
+    /// — this is the adapter boundary between pure domain data and WPF rendering.
+    /// </summary>
     public interface IImageRenderingService : IDisposable
     {
         void Initialize(int width, int height);

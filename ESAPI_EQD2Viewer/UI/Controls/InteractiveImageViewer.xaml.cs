@@ -5,6 +5,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using EQD2Viewer.Core.Models;
+using ESAPI_EQD2Viewer.Rendering;
 
 namespace ESAPI_EQD2Viewer.UI.Controls
 {

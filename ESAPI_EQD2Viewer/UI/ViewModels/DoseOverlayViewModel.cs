@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using EQD2Viewer.Core.Models;
+using ESAPI_EQD2Viewer.Rendering;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 

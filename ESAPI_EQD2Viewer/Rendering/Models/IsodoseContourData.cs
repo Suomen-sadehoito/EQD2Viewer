@@ -1,6 +1,6 @@
 using System.Windows.Media;
 
-namespace EQD2Viewer.Core.Models
+namespace ESAPI_EQD2Viewer.Rendering
 {
     public class IsodoseContourData
     {

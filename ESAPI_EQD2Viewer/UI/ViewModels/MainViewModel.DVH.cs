@@ -1,7 +1,6 @@
 using EQD2Viewer.Core.Calculations;
 using EQD2Viewer.Core.Data;
 using EQD2Viewer.Core.Models;
-using ESAPI_EQD2Viewer.Services;
 using OxyPlot;
 using OxyPlot.Series;
 using System.Collections.Generic;
@@ -40,7 +39,7 @@ namespace ESAPI_EQD2Viewer.UI.ViewModels
                 settingItem.PropertyChanged += OnStructureSettingChanged;
                 StructureSettings.Add(settingItem);
 
-                SummaryData.Add(((DVHService)_dvhService).BuildPhysicalSummaryFromCurve(dvhCurve, planId));
+                SummaryData.Add(_dvhService.BuildPhysicalSummaryFromCurve(dvhCurve, planId));
 
                 var color = OxyColor.FromArgb(structure.ColorA, structure.ColorR, structure.ColorG, structure.ColorB);
                 var series = new LineSeries
@@ -85,7 +84,7 @@ namespace ESAPI_EQD2Viewer.UI.ViewModels
                 var setting = StructureSettings.FirstOrDefault(s => s.Structure.Id == entry.Structure.Id);
                 double alphaBeta = setting?.AlphaBeta ?? 3.0;
 
-                SummaryData.Add(((DVHService)_dvhService).BuildEQD2SummaryFromCurve(
+                SummaryData.Add(_dvhService.BuildEQD2SummaryFromCurve(
                     entry.DvhCurve, entry.PlanId, _doseOverlay.NumberOfFractions, alphaBeta, _meanMethod));
 
                 DoseVolumePoint[] curveInGy = null;
