@@ -211,20 +211,6 @@ namespace EQD2Viewer.App.UI.ViewModels
 
         internal void ClearHotspot() => SetHotspot(0, -1, 0, 0);
 
-        private EQD2MeanMethod _meanMethod = EQD2MeanMethod.Simple;
-        public EQD2MeanMethod MeanMethod
-        {
-            get => _meanMethod;
-            set { if (SetProperty(ref _meanMethod, value) && _dvhCache.Count > 0) RecalculateAllDVH(); }
-        }
-
-        private bool _useDifferentialMethod;
-        public bool UseDifferentialMethod
-        {
-            get => _useDifferentialMethod;
-            set { if (SetProperty(ref _useDifferentialMethod, value)) MeanMethod = value ? EQD2MeanMethod.Differential : EQD2MeanMethod.Simple; }
-        }
-
         // ════════════════════════════════════════════════════════
         // REGISTRATION OVERLAY
         // ════════════════════════════════════════════════════════

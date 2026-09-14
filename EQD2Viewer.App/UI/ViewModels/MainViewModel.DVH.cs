@@ -78,7 +78,7 @@ namespace EQD2Viewer.App.UI.ViewModels
         {
             var oldSeries = PlotModel.Series.Where(s => (s.Tag as string)?.StartsWith("EQD2_") ?? false).ToList();
             foreach (var s in oldSeries) PlotModel.Series.Remove(s);
-            var oldSummaries = SummaryData.Where(s => s.Type == "EQD2").ToList();
+            var oldSummaries = SummaryData.Where(s => s.Type == "EQD2" && !s.IsSummation).ToList();
             foreach (var s in oldSummaries) SummaryData.Remove(s);
 
             if (!_doseOverlay.IsEQD2Enabled) { RefreshPlot(); return; }
@@ -89,7 +89,7 @@ namespace EQD2Viewer.App.UI.ViewModels
                 double alphaBeta = setting?.AlphaBeta ?? 3.0;
 
                 SummaryData.Add(_dvhService.BuildEQD2SummaryFromCurve(
-                    entry.DvhCurve, entry.PlanId, _doseOverlay.NumberOfFractions, alphaBeta, _meanMethod));
+                    entry.DvhCurve, entry.PlanId, _doseOverlay.NumberOfFractions, alphaBeta));
 
                 DoseVolumePoint[]? curveInGy = null;
                 if (entry.DvhCurve.Curve != null)

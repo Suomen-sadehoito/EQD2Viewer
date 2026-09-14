@@ -1,11 +1,11 @@
-﻿using EQD2Viewer.Core.Data;
+using EQD2Viewer.Core.Data;
 using EQD2Viewer.Core.Models;
 
 namespace EQD2Viewer.Core.Interfaces
 {
     /// <summary>
     /// DVH calculation service interface.
-    /// 
+    ///
     /// Provides methods for:
     ///   - Computing DVH from summed dose arrays (summation workflow)
     ///   - Building summary statistics from pre-computed DVH curves
@@ -26,9 +26,12 @@ namespace EQD2Viewer.Core.Interfaces
         DVHSummary BuildPhysicalSummaryFromCurve(DvhCurveData dvh, string planId);
 
         /// <summary>
-        /// Builds an EQD2-converted summary from a pre-computed DVH curve.
+        /// Builds an EQD2-converted summary from a pre-computed DVH curve. Dmean is the
+        /// volume-weighted mean of the EQD2-converted curve (each dose level converted
+        /// separately), never EQD2 of the physical mean — the two differ whenever the
+        /// dose is heterogeneous, and the latter underestimates for OARs.
         /// </summary>
         DVHSummary BuildEQD2SummaryFromCurve(DvhCurveData dvh, string planId,
-            int numberOfFractions, double alphaBeta, EQD2MeanMethod meanMethod);
+            int numberOfFractions, double alphaBeta);
     }
 }

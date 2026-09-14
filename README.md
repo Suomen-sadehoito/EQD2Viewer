@@ -127,7 +127,9 @@ together in EQD2.
 In the summation dialog:
 
 - Every plan with a dose, across all of the patient's courses, is listed.
-- Tick the plans you want to include (at least two).
+- Tick the plans you want to include. A single plan is allowed: it runs that
+  plan through the voxel engine so you can compare its "Σ" row and curve
+  against the Eclipse DVH of the same plan.
 - Mark one as the **reference**. Its CT grid is the base everything is resampled
   onto. The reference must be on the same CT (frame of reference) as the plan
   you opened the viewer from — the sum is always built on that CT grid, and the

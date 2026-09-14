@@ -16,6 +16,7 @@ namespace EQD2Viewer.Services
                 StructureId = dvh.StructureId,
                 PlanId = planId,
                 Type = "Physical",
+                Source = DVHSummary.SourceEclipse,
                 DMax = dvh.DMaxGy,
                 DMean = dvh.DMeanGy,
                 DMin = dvh.DMinGy,
@@ -24,19 +25,24 @@ namespace EQD2Viewer.Services
         }
 
         public DVHSummary BuildEQD2SummaryFromCurve(DvhCurveData dvh, string planId,
-     int numberOfFractions, double alphaBeta, EQD2MeanMethod meanMethod)
+            int numberOfFractions, double alphaBeta)
         {
             double eqd2Dmax = EQD2Calculator.ToEQD2(dvh.DMaxGy, numberOfFractions, alphaBeta);
             double eqd2Dmin = EQD2Calculator.ToEQD2(dvh.DMinGy, numberOfFractions, alphaBeta);
             double eqd2Dmean;
 
-            if (meanMethod == EQD2MeanMethod.Differential && dvh.Curve != null)
+            if (dvh.Curve != null && dvh.Curve.Length >= 2)
             {
+                // Convert every dose level of the curve, then take the volume-weighted mean.
+                // This is the same "convert each element, then average" that the voxel-based
+                // summation does, so single-plan and Σ rows agree in method.
                 var curvePoints = dvh.Curve.Select(p => new DoseVolumePoint(p[0], p[1])).ToArray();
                 eqd2Dmean = EQD2Calculator.CalculateMeanEQD2FromDVH(curvePoints, numberOfFractions, alphaBeta);
             }
             else
             {
+                // No curve data — EQD2 of the physical mean is the only figure available.
+                // Exact for a uniform dose; an underestimate for a heterogeneous one.
                 eqd2Dmean = EQD2Calculator.ToEQD2(dvh.DMeanGy, numberOfFractions, alphaBeta);
             }
 
@@ -45,6 +51,7 @@ namespace EQD2Viewer.Services
                 StructureId = dvh.StructureId,
                 PlanId = planId,
                 Type = "EQD2",
+                Source = DVHSummary.SourceEclipse,
                 DMax = eqd2Dmax,
                 DMean = eqd2Dmean,
                 DMin = eqd2Dmin,

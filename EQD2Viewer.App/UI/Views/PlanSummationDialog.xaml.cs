@@ -175,11 +175,15 @@ namespace EQD2Viewer.App.UI.Views
         private void Compute_Click(object sender, RoutedEventArgs e)
         {
             var includedPlans = PlanRows.Where(p => p.IsIncluded).ToList();
-            if (includedPlans.Count < 2)
+            // A single plan is allowed on purpose: it runs the open plan through the voxel
+            // engine, so its Σ row and curve can be compared with the Eclipse DVH of the same
+            // plan — the most direct check of the resampling and rasterisation.
+            if (includedPlans.Count < 1)
             {
                 MessageBox.Show(
-                    "Select at least two plans to sum.\n\n" +
-                    "Tick the 'Include' checkbox on the rows you want to combine.",
+                    "Select at least one plan.\n\n" +
+                    "Tick the 'Include' checkbox on the rows you want to combine. A single plan " +
+                    "gives a voxel-based DVH to compare against the Eclipse DVH of that plan.",
                     "Summation setup", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }

@@ -136,6 +136,7 @@
 									<DataGridTextColumn Header="Structure" Width="*" Binding="{Binding StructureId}"/>
 									<DataGridTextColumn Header="Plan" Width="65" Binding="{Binding PlanId}"/>
 									<DataGridTextColumn Header="Type" Width="85" Binding="{Binding Type}"/>
+										<DataGridTextColumn Header="Source" Width="80" Binding="{Binding Source}"/>
 									<DataGridTextColumn Header="Dmax (Gy)" Width="78" Binding="{Binding DMax, StringFormat=F2}"/>
 									<DataGridTextColumn Header="Dmean (Gy)" Width="82" Binding="{Binding DMean, StringFormat=F2}"/>
 									<DataGridTextColumn Header="Dmin (Gy)" Width="78" Binding="{Binding DMin, StringFormat=F2}"/>
@@ -419,10 +420,6 @@
                                         Command="{Binding SetDisplayAlphaBetaCommand}" CommandParameter="10"
                                         ToolTip="Tumor / early-responding tissue (most carcinomas α/β ≈ 10 Gy)"/>
 							</StackPanel>
-
-							<CheckBox Content=" Differential Dmean method" Style="{StaticResource Check}"
-                                      IsChecked="{Binding UseDifferentialMethod}" Margin="0,2,0,0"
-                                      ToolTip="More accurate: computes mean EQD2 from differential DVH bins instead of converting physical Dmean directly. Accounts for dose heterogeneity within the structure."/>
 						</StackPanel>
 					</Border>
 
