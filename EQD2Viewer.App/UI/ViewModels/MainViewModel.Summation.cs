@@ -142,7 +142,7 @@ namespace EQD2Viewer.App.UI.ViewModels
                         OverlayPlanOptions.Add(plan.DisplayLabel);
                     if (OverlayPlanOptions.Count > 0) SelectedOverlayPlanLabel = OverlayPlanOptions[0];
 
-                    CalculateSummationDVH(result.MaxDoseGy);
+                    CalculateSummationDVH();
                     RequestRender();
                 }
                 else
@@ -245,7 +245,17 @@ namespace EQD2Viewer.App.UI.ViewModels
             finally { IsSummationComputing = false; }
         }
 
-        private void CalculateSummationDVH(double maxDoseGy)
+        /// <summary>
+        /// Recomputes the summation ("Σ") rows and curves when the selected structures or
+        /// their α/β change while a summation is active. No-op otherwise.
+        /// </summary>
+        private void RefreshSummationDVHIfActive()
+        {
+            if (_isSummationActive && _summationService != null && _summationService.HasSummedDose)
+                CalculateSummationDVH();
+        }
+
+        private void CalculateSummationDVH()
         {
             if (_summationService == null || !_summationService.HasSummedDose) return;
             var structureIds = _summationService.GetCachedStructureIds();
@@ -253,7 +263,6 @@ namespace EQD2Viewer.App.UI.ViewModels
 
             var selectedIds = _dvhCache.Select(c => c.Structure.Id).ToHashSet();
             double voxelVolCc = _summationService.GetVoxelVolumeCc();
-            int sliceCount = _summationService.SliceCount;
             bool isEqd2Sum = _activeSummationConfig?.Method == SummationMethod.EQD2;
 
             ClearSummationDVH();
@@ -266,38 +275,31 @@ namespace EQD2Viewer.App.UI.ViewModels
                 double structureAlphaBeta = structureSetting?.AlphaBeta ?? 3.0;
                 string methodLabel = isEqd2Sum ? $"EQD2 α/β={structureAlphaBeta:F1}" : "Physical Sum";
 
-                DoseVolumePoint[] dvhPoints;
-
-                if (isEqd2Sum)
-                {
-                    dvhPoints = _summationService.ComputeStructureEQD2DVH(
-                        structureId, structureAlphaBeta, maxDoseGy);
-                }
-                else
-                {
-                    double[][] summedSlices = new double[sliceCount][];
-                    bool[][] masks = new bool[sliceCount][];
-                    for (int z = 0; z < sliceCount; z++)
-                    {
-                        summedSlices[z] = _summationService.GetSummedSlice(z) ?? Array.Empty<double>();
-                        masks[z] = _summationService.GetStructureMask(structureId, z) ?? Array.Empty<bool>();
-                    }
-                    dvhPoints = _dvhService.CalculateDVHFromSummedDose(summedSlices, masks, voxelVolCc, maxDoseGy);
-                }
-
-                if (dvhPoints == null || dvhPoints.Length == 0) continue;
-
-                long totalVoxels = 0;
-                for (int z = 0; z < sliceCount; z++)
-                {
-                    bool[]? mask = _summationService.GetStructureMask(structureId, z);
-                    if (mask != null) for (int i = 0; i < mask.Length; i++) if (mask[i]) totalVoxels++;
-                }
-
-                SummaryData.Add(_dvhService.BuildSummaryFromCurve(
-                    structureId, "Summation", methodLabel, dvhPoints, totalVoxels * voxelVolCc));
+                // One calculation path for both EQD2 and Physical mode. The table row is
+                // built from exact voxel statistics — never read back from the curve.
+                var result = _summationService.ComputeStructureDVH(structureId, structureAlphaBeta);
+                if (result.IsEmpty) continue;
 
                 var cached = _dvhCache.FirstOrDefault(c => c.Structure.Id == structureId);
+
+                // Volume: Eclipse's own figure for the structure when the snapshot has it, so the
+                // Σ row agrees with the plan rows; otherwise voxel count × voxel volume.
+                double eclipseVolumeCc = cached?.DvhCurve?.VolumeCc ?? 0;
+                double volumeCc = eclipseVolumeCc > 0
+                    ? eclipseVolumeCc
+                    : result.Statistics.VoxelCount * voxelVolCc;
+
+                SummaryData.Add(new DVHSummary
+                {
+                    StructureId = structureId,
+                    PlanId = "Summation",
+                    Type = methodLabel,
+                    DMax = result.Statistics.DMaxGy,
+                    DMean = result.Statistics.DMeanGy,
+                    DMin = result.Statistics.DMinGy,
+                    Volume = volumeCc
+                });
+
                 OxyColor color = cached != null
                     ? OxyColor.FromArgb(cached.Structure.ColorA, cached.Structure.ColorR, cached.Structure.ColorG, cached.Structure.ColorB)
                     : OxyColors.White;
@@ -310,7 +312,7 @@ namespace EQD2Viewer.App.UI.ViewModels
                     StrokeThickness = 2.5,
                     LineStyle = LineStyle.DashDot
                 };
-                series.Points.AddRange(dvhPoints.Select(p => new DataPoint(p.DoseGy, p.VolumePercent)));
+                series.Points.AddRange(result.Curve.Select(p => new DataPoint(p.DoseGy, p.VolumePercent)));
                 PlotModel.Series.Add(series);
             }
             RefreshPlot();

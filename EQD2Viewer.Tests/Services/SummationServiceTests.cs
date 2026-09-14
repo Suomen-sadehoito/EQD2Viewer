@@ -6,6 +6,7 @@ using EQD2Viewer.Tests.Common;
 using FluentAssertions;
 using Moq;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -236,27 +237,27 @@ namespace EQD2Viewer.Tests.Services
         // ── Structure DVH ──────────────────────────────────────────────────
 
         [Fact]
-        public async Task ComputeStructureEQD2DVH_NonexistentStructure_ReturnsEmpty()
+        public async Task ComputeStructureDVH_NonexistentStructure_ReturnsEmpty()
         {
             var loader = MakeLoader(refDoseGy: 5, movingDoseGy: 0);
             var svc = new SummationService(MakeReferenceCt(), loader.Object, new List<RegistrationData>());
             svc.PrepareData(MakeConfig()).Success.Should().BeTrue();
             await svc.ComputeAsync(null, CancellationToken.None);
 
-            var dvh = svc.ComputeStructureEQD2DVH("NonExistent", structureAlphaBeta: 3.0, maxDoseGy: 10);
-            dvh.Should().BeEmpty();
+            var result = svc.ComputeStructureDVH("NonExistent", structureAlphaBeta: 3.0);
+            result.IsEmpty.Should().BeTrue();
+            result.Curve.Should().BeEmpty();
+            result.Statistics.VoxelCount.Should().Be(0);
         }
 
         [Fact]
-        public async Task ComputeStructureEQD2DVH_ZeroMaxDose_ReturnsEmpty()
+        public void ComputeStructureDVH_BeforeCompute_ReturnsEmpty()
         {
             var loader = MakeLoader(refDoseGy: 5, movingDoseGy: 0);
             var svc = new SummationService(MakeReferenceCt(), loader.Object, new List<RegistrationData>());
             svc.PrepareData(MakeConfig()).Success.Should().BeTrue();
-            await svc.ComputeAsync(null, CancellationToken.None);
-
-            var dvh = svc.ComputeStructureEQD2DVH("AnyStruct", structureAlphaBeta: 3.0, maxDoseGy: 0);
-            dvh.Should().BeEmpty();
+            // No ComputeAsync → no per-plan physical slices yet.
+            svc.ComputeStructureDVH("AnyStruct", structureAlphaBeta: 3.0).IsEmpty.Should().BeTrue();
         }
 
         // ── Display α/β recompute ──────────────────────────────────────────
@@ -400,12 +401,11 @@ namespace EQD2Viewer.Tests.Services
         // ── Structure-specific EQD2 DVH ──────────────────────────────────
 
         /// <summary>
-        /// Constructs a minimal structure mask around the known-hot region, computes the DVH,
-        /// and verifies monotonic cumulative volume. Covers the successful-path of
-        /// ComputeStructureEQD2DVH which was previously only tested for negative cases.
+        /// Constructs a structure covering the whole volume, computes the DVH, and verifies
+        /// monotonic cumulative volume plus exact statistics for a uniform dose.
         /// </summary>
         [Fact]
-        public async Task ComputeStructureEQD2DVH_NonEmptyStructure_ProducesMonotonicCurve()
+        public async Task ComputeStructureDVH_NonEmptyStructure_ProducesMonotonicCurve()
         {
             // Reference plan dose = 10 Gy everywhere. Structure: the whole volume.
             var loader = new Mock<ISummationDataLoader>(MockBehavior.Strict);
@@ -437,15 +437,154 @@ namespace EQD2Viewer.Tests.Services
             svc.PrepareData(config).Success.Should().BeTrue();
             await svc.ComputeAsync(null, CancellationToken.None);
 
-            var dvh = svc.ComputeStructureEQD2DVH("BODY", structureAlphaBeta: 3.0, maxDoseGy: 15);
+            var result = svc.ComputeStructureDVH("BODY", structureAlphaBeta: 3.0);
+            var dvh = result.Curve;
 
-            dvh.Should().NotBeEmpty();
+            result.IsEmpty.Should().BeFalse();
+            result.Statistics.VoxelCount.Should().Be(RefX * RefY * RefZ);
+            result.Statistics.DMaxGy.Should().BeApproximately(10, 1e-9);
+            result.Statistics.DMeanGy.Should().BeApproximately(10, 1e-9);
+            result.Statistics.DMinGy.Should().BeApproximately(10, 1e-9);
             // Cumulative DVH must be monotonically non-increasing.
             for (int i = 1; i < dvh.Length; i++)
                 dvh[i].VolumePercent.Should().BeLessOrEqualTo(dvh[i - 1].VolumePercent + 0.01,
                     $"cumulative DVH must not grow at bin {i}");
-            // First bin (dose 0) should be ~100% volume.
-            dvh[0].VolumePercent.Should().BeApproximately(100.0, 1.0);
+            // First bin (dose 0) is 100 % volume; the curve ends at 0 % just above 10 Gy.
+            dvh[0].VolumePercent.Should().Be(100.0);
+            dvh.Last().VolumePercent.Should().Be(0.0);
+            dvh.Last().DoseGy.Should().BeInRange(10.0, 10.03, "bins are 0.01 Gy wide and sized to the structure's own max");
+        }
+
+        /// <summary>
+        /// Regression for the phantom-Dmax bug. A structure that extends beyond the dose grid
+        /// (here: a 4-slice spinal canal over a 2-slice dose grid) has voxels that receive no
+        /// dose. They are still voxels of the structure: counted at 0 Gy, so the curve decays
+        /// to 0 % above the true maximum and Dmax is the real maximum — not the top of a
+        /// histogram sized to the global summed maximum (≈ 1.1 × global max).
+        /// </summary>
+        [Fact]
+        public async Task ComputeStructureDVH_StructureExtendsBeyondDoseGrid_UncoveredVoxelsCountAsZero()
+        {
+            const int ctZ = 4, doseZ = 2;
+            var loader = new Mock<ISummationDataLoader>(MockBehavior.Strict);
+            loader.Setup(l => l.LoadPlanDose("C1", "PlanRef", It.IsAny<double>()))
+                  .Returns(TestVolumeFactory.MakeSummationDoseData(
+                      TestVolumeFactory.FillDose(RefX, RefY, doseZ, 10), RefX, RefY, doseZ));
+            loader.Setup(l => l.GetPlanImageFOR("C1", "PlanRef")).Returns("FOR_REF");
+            loader.Setup(l => l.LoadStructureContours(It.IsAny<string>(), It.IsAny<string>()))
+                  .Returns(new List<StructureData>
+                  {
+                      new StructureData { Id = "SpinalCanal", DicomType = "ORGAN", ContoursBySlice = BuildWholeVolumeStructure(ctZ) }
+                  });
+
+            var svc = new SummationService(TestVolumeFactory.MakeCt(RefX, RefY, ctZ, "FOR_REF"), loader.Object, new List<RegistrationData>());
+            var config = new SummationConfig
+            {
+                Method = SummationMethod.Physical,
+                GlobalAlphaBeta = 3.0,
+                Plans = new List<SummationPlanEntry>
+                {
+                    new SummationPlanEntry { CourseId = "C1", PlanId = "PlanRef", DisplayLabel = "Ref",
+                        NumberOfFractions = 5, TotalDoseGy = 10, Weight = 1.0, IsReference = true }
+                }
+            };
+            svc.PrepareData(config).Success.Should().BeTrue();
+            var computed = await svc.ComputeAsync(null, CancellationToken.None);
+            computed.Success.Should().BeTrue();
+            computed.MaxDoseGy.Should().BeApproximately(10, 1e-9);
+
+            var result = svc.ComputeStructureDVH("SpinalCanal", structureAlphaBeta: 3.0);
+
+            result.IsEmpty.Should().BeFalse();
+            result.Statistics.VoxelCount.Should().Be(RefX * RefY * ctZ, "uncovered slices still belong to the structure");
+            result.Statistics.DMaxGy.Should().BeApproximately(10, 1e-9, "Dmax is the true maximum, not 1.1 × global max");
+            result.Statistics.DMinGy.Should().Be(0.0, "half of the structure is outside the dose grid");
+            result.Statistics.DMeanGy.Should().BeApproximately(5, 1e-9);
+
+            var dvh = result.Curve;
+            dvh[0].VolumePercent.Should().Be(100.0);
+            dvh.First(p => p.DoseGy > 5.0).VolumePercent.Should().BeApproximately(50.0, 1e-9,
+                "the covered half receives 10 Gy, the uncovered half 0 Gy");
+            dvh.First(p => p.DoseGy > 9.985).VolumePercent.Should().BeApproximately(50.0, 1e-9,
+                "the covered half still counts one bin below the maximum");
+            dvh.Last().DoseGy.Should().BeInRange(10.0, 10.02, "bins are 0.01 Gy and the curve is sized to the structure max");
+            dvh.Last().VolumePercent.Should().Be(0.0, "the curve must decay to zero above the true maximum");
+        }
+
+        /// <summary>
+        /// Second latent Dmax bug: the structure curve used to be binned over 1.1 × the global
+        /// display maximum (computed at the GLOBAL α/β) while its voxels were converted at the
+        /// STRUCTURE α/β. For an OAR (α/β = 3) in a sum computed at α/β = 10, the structure's
+        /// EQD2 exceeds that range and was clamped into the last bin. Statistics now come
+        /// straight from the voxels and the curve is sized to the structure's own maximum.
+        /// </summary>
+        [Fact]
+        public async Task ComputeStructureDVH_StructureAlphaBetaBelowGlobal_DmaxIsExactNotClamped()
+        {
+            // 20 Gy in one fraction. Global α/β = 10 → EQD2 = 20·(20+10)/(2+10) = 50 Gy (display sum).
+            // Structure α/β = 3 → EQD2 = 20·(20+3)/(2+3) = 92 Gy, well above 1.1 × 50 = 55 Gy.
+            var loader = new Mock<ISummationDataLoader>(MockBehavior.Strict);
+            loader.Setup(l => l.LoadPlanDose("C1", "PlanRef", It.IsAny<double>())).Returns(MakeDoseData(FillDose(20)));
+            loader.Setup(l => l.GetPlanImageFOR("C1", "PlanRef")).Returns("FOR_REF");
+            loader.Setup(l => l.LoadStructureContours(It.IsAny<string>(), It.IsAny<string>()))
+                  .Returns(new List<StructureData>
+                  {
+                      new StructureData { Id = "OAR", DicomType = "ORGAN", ContoursBySlice = BuildWholeVolumeStructure() }
+                  });
+
+            var svc = new SummationService(MakeReferenceCt(), loader.Object, new List<RegistrationData>());
+            var config = new SummationConfig
+            {
+                Method = SummationMethod.EQD2,
+                GlobalAlphaBeta = 10.0,
+                Plans = new List<SummationPlanEntry>
+                {
+                    new SummationPlanEntry { CourseId = "C1", PlanId = "PlanRef", DisplayLabel = "Ref",
+                        NumberOfFractions = 1, TotalDoseGy = 20, Weight = 1.0, IsReference = true }
+                }
+            };
+            svc.PrepareData(config).Success.Should().BeTrue();
+            var computed = await svc.ComputeAsync(null, CancellationToken.None);
+            computed.MaxDoseGy.Should().BeApproximately(50, 1e-9, "display sum uses the global α/β");
+
+            var result = svc.ComputeStructureDVH("OAR", structureAlphaBeta: 3.0);
+
+            result.Statistics.DMaxGy.Should().BeApproximately(92, 1e-9);
+            result.Statistics.DMeanGy.Should().BeApproximately(92, 1e-9);
+            result.Statistics.DMinGy.Should().BeApproximately(92, 1e-9);
+            result.Curve.Last().DoseGy.Should().BeInRange(92.0, 92.02, "the curve is sized to the structure's own maximum");
+            result.Curve.Last().VolumePercent.Should().Be(0.0);
+            result.Curve.First(p => p.DoseGy > 91.9).VolumePercent.Should().Be(100.0);
+        }
+
+        /// <summary>
+        /// Physical mode goes through the same method as EQD2 mode: plans are summed with
+        /// their weights and no fractionation conversion.
+        /// </summary>
+        [Fact]
+        public async Task ComputeStructureDVH_PhysicalMode_SumsPlansWithoutConversion()
+        {
+            var loader = new Mock<ISummationDataLoader>(MockBehavior.Strict);
+            loader.Setup(l => l.LoadPlanDose("C1", "PlanRef", It.IsAny<double>())).Returns(MakeDoseData(FillDose(3)));
+            loader.Setup(l => l.LoadPlanDose("C1", "PlanMov", It.IsAny<double>())).Returns(MakeDoseData(FillDose(7)));
+            loader.Setup(l => l.GetPlanImageFOR("C1", "PlanRef")).Returns("FOR_REF");
+            loader.Setup(l => l.GetPlanImageFOR("C1", "PlanMov")).Returns("FOR_REF");
+            loader.Setup(l => l.LoadStructureContours(It.IsAny<string>(), It.IsAny<string>()))
+                  .Returns(new List<StructureData>
+                  {
+                      new StructureData { Id = "BODY", DicomType = "EXTERNAL", ContoursBySlice = BuildWholeVolumeStructure() }
+                  });
+
+            var svc = new SummationService(MakeReferenceCt(), loader.Object, new List<RegistrationData>());
+            svc.PrepareData(MakeConfig()).Success.Should().BeTrue();   // Physical, weights 1.0
+            await svc.ComputeAsync(null, CancellationToken.None);
+
+            var result = svc.ComputeStructureDVH("BODY", structureAlphaBeta: 3.0);
+
+            result.Statistics.VoxelCount.Should().Be(RefX * RefY * RefZ);
+            result.Statistics.DMaxGy.Should().BeApproximately(10, 1e-9);
+            result.Statistics.DMeanGy.Should().BeApproximately(10, 1e-9);
+            result.Statistics.DMinGy.Should().BeApproximately(10, 1e-9);
         }
 
         // ── Round-trip: GetSummedSlice / GetStructureMask ──────────────────
@@ -472,21 +611,23 @@ namespace EQD2Viewer.Tests.Services
             svc.GetSummedSlice(0).Should().BeNull("no compute → no data");
         }
 
-        /// <summary>Builds a single polygon covering the entire reference slice, repeated for all Z.</summary>
-        private static Dictionary<int, List<double[][]>> BuildWholeVolumeStructure()
+        /// <summary>Builds a single polygon covering the entire reference slice, repeated for <paramref name="zCount"/> slices.</summary>
+        private static Dictionary<int, List<double[][]>> BuildWholeVolumeStructure(int zCount = RefZ)
         {
             var dict = new Dictionary<int, List<double[][]>>();
-            // Reference CT origin at (0,0,0), spacing 1×1×1, size 4×4×2 → slice extent 0..3 in x,y.
+            // Reference CT origin at (0,0,0), spacing 1×1×1, size 4×4×Z → slice extent 0..3 in x,y.
             // Build a closed square polygon that covers the full slice. Contour points are world mm.
-            for (int z = 0; z < RefZ; z++)
+            // The far edge sits at 3.6, not 3.5: the rasterizer samples row centres (y + 0.5) with a
+            // half-open rule, so an edge exactly on 3.5 would exclude the last row.
+            for (int z = 0; z < zCount; z++)
             {
                 double zMm = z; // identity direction → z index == z mm
                 var polygon = new double[][]
                 {
                     new double[] { -0.5, -0.5, zMm },
-                    new double[] {  3.5, -0.5, zMm },
-                    new double[] {  3.5,  3.5, zMm },
-                    new double[] { -0.5,  3.5, zMm },
+                    new double[] {  3.6, -0.5, zMm },
+                    new double[] {  3.6,  3.6, zMm },
+                    new double[] { -0.5,  3.6, zMm },
                 };
                 dict[z] = new List<double[][]> { polygon };
             }

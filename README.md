@@ -129,9 +129,16 @@ In the summation dialog:
 - Every plan with a dose, across all of the patient's courses, is listed.
 - Tick the plans you want to include (at least two).
 - Mark one as the **reference**. Its CT grid is the base everything is resampled
-  onto.
+  onto. The reference must be on the same CT (frame of reference) as the plan
+  you opened the viewer from — the sum is always built on that CT grid, and the
+  dialog refuses other combinations rather than place masks on the wrong image.
 - Set fractions and α/β so each plan is converted to EQD2 with its own
   fractionation before being summed.
+
+The summation ("Σ") rows in the DVH table are computed from the summed voxels,
+with Dmax/Dmean/Dmin taken directly from the voxel values rather than read back
+from the plotted curve. A structure that extends beyond a plan's dose grid keeps
+its uncovered part as 0 Gy voxels, which is why such a structure shows Dmin = 0.
 
 About registrations: **the viewer does not compute any registration.** It reuses
 the ordinary rigid registrations already stored on the patient — the ones made in

@@ -133,8 +133,7 @@ namespace EQD2Viewer.App.UI.ViewModels
         {
             IsEQD2Enabled = true;
             RecalculateAllDVH();
-            if (_isSummationActive && _summationService != null && _summationService.HasSummedDose)
-                CalculateSummationDVH(_summationService.MaxDoseGy);
+            RefreshSummationDVHIfActive();
         }
 
         [RelayCommand]

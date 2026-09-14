@@ -175,5 +175,30 @@ namespace EQD2Viewer.Tests.Services
             summary.DMean.Should().BeInRange(5.0, 15.0,
                 "mean of linear distribution should be near center");
         }
+
+        /// <summary>
+        /// Regression for the phantom-Dmax bug, end to end through the legacy binner and
+        /// the curve-based summary: 7 voxels at 25.6 Gy, 3 voxels at 0 Gy (structure partly
+        /// outside the dose grid), global summed maximum 76 Gy. Before the fix the curve never
+        /// decayed below 30 %, so BuildSummaryFromCurve reported the top of the histogram —
+        /// bin 999 × 1.1 × 76 / 1000 = 83.5 Gy — as Dmax, regardless of the structure's dose.
+        /// </summary>
+        [Fact]
+        public void CalculateDVHFromSummedDose_StructureWithZeroDoseVoxels_DmaxIsTrueMaxNotHistogramEdge()
+        {
+            var dose = new double[10];
+            for (int i = 0; i < 7; i++) dose[i] = 25.6;
+            var mask = Enumerable.Repeat(true, 10).ToArray();
+
+            var curve = _service.CalculateDVHFromSummedDose(new[] { dose }, new[] { mask }, 0.001, 76.0);
+            var summary = _service.BuildSummaryFromCurve("SpinalCanal", "Summation", "EQD2", curve, 10 * 0.001);
+
+            double binWidth = 76.0 * 1.1 / DomainConstants.DvhHistogramBins;
+            summary.DMax.Should().BeApproximately(25.6, binWidth + 1e-9,
+                "Dmax must be the bin holding the true maximum, not the histogram edge");
+            summary.DMax.Should().BeLessThan(30.0, "83.5 Gy was the histogram edge, not a dose");
+            summary.DMin.Should().Be(0.0, "part of the structure receives no dose");
+            curve.Last().VolumePercent.Should().Be(0.0);
+        }
     }
 }

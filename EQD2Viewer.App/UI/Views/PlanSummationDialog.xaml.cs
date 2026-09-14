@@ -209,6 +209,30 @@ namespace EQD2Viewer.App.UI.Views
                 }
 
             var refPlan = includedPlans.First(p => p.IsReference);
+
+            // The sum is always built on the CT of the plan that is open in Eclipse (the snapshot's
+            // CT image): structure masks are rasterised on that grid and the reference plan's dose
+            // is sampled on it without any registration. A reference plan on another frame of
+            // reference would silently put every mask and dose sample in the wrong place, so refuse
+            // that combination instead of producing a plausible-looking wrong sum.
+            if (_currentPlan != null)
+            {
+                var openRow = PlanRows.FirstOrDefault(r => r.PlanId == _currentPlan.Id && r.CourseId == _currentPlan.CourseId);
+                string openFOR = openRow?.ImageFOR ?? "";
+                bool refIsOpenPlan = refPlan.PlanId == _currentPlan.Id && refPlan.CourseId == _currentPlan.CourseId;
+                if (!refIsOpenPlan && !string.IsNullOrEmpty(openFOR) && !string.IsNullOrEmpty(refPlan.ImageFOR)
+                    && !string.Equals(refPlan.ImageFOR, openFOR, StringComparison.OrdinalIgnoreCase))
+                {
+                    MessageBox.Show(
+                        $"Plan '{refPlan.CourseId} / {refPlan.PlanId}' is on a different CT than the plan open in Eclipse " +
+                        $"('{_currentPlan.CourseId} / {_currentPlan.Id}').\n\n" +
+                        "The sum is always computed on the open plan's CT grid, so the reference plan must share that CT.\n\n" +
+                        "Either open that plan in Eclipse and start the viewer from it, or choose the open plan as the reference.",
+                        "Summation setup", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
+            }
+
             foreach (var p in includedPlans.Where(p => !p.IsReference))
             {
                 bool sameFOR = !string.IsNullOrEmpty(p.ImageFOR) && !string.IsNullOrEmpty(refPlan.ImageFOR)

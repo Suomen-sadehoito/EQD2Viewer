@@ -25,7 +25,7 @@ namespace EQD2Viewer.Services
     ///
     /// Post-compute:
     ///   RecomputeEQD2DisplayAsync() -- recalculates display sum with a new alpha/beta.
-    ///   ComputeStructureEQD2DVH()   -- per-structure DVH with structure-specific alpha/beta.
+    ///   ComputeStructureDVH()       -- per-structure DVH + exact statistics with structure-specific alpha/beta.
     ///
     /// Memory: Stores N * W * H * Z * 8 bytes for N plans' physical doses,
     /// plus W * H * Z * 8 bytes for the display EQD2 sum.
@@ -315,22 +315,24 @@ namespace EQD2Viewer.Services
    }, ct);
         }
 
-        public DoseVolumePoint[] ComputeStructureEQD2DVH(string structureId,
-        double structureAlphaBeta, double maxDoseGy)
+        public StructureDvhResult ComputeStructureDVH(string structureId, double structureAlphaBeta)
         {
-            if (_perPlanPhysicalSlices == null || _structureMasks == null || maxDoseGy <= 0)
-                return new DoseVolumePoint[0];
+            if (_perPlanPhysicalSlices == null || _structureMasks == null
+                || _cachedPlans == null || _config == null || string.IsNullOrEmpty(structureId))
+                return StructureDvhResult.Empty(structureId);
             if (!_structureMasks.TryGetValue(structureId, out var masks))
-                return new DoseVolumePoint[0];
+                return StructureDvhResult.Empty(structureId);
 
-            int planCount = _cachedPlans!.Count;
+            int planCount = _cachedPlans.Count;
             int sliceCount = Math.Min(_refZ, masks.Length);
 
+            // Same per-plan conversion as the display sum, but at the structure's own α/β.
+            // Physical mode routes through here too (useEqd2 = false → identity).
             var factors = new (double Q, double L, double Weight, bool UseEqd2)[planCount];
             for (int p = 0; p < planCount; p++)
             {
-                var cp = _cachedPlans![p];
-                bool useEqd2 = _config!.Method == SummationMethod.EQD2
+                var cp = _cachedPlans[p];
+                bool useEqd2 = _config.Method == SummationMethod.EQD2
                 && cp.Entry.NumberOfFractions > 0 && structureAlphaBeta > 0;
                 double q = 0, l = 1.0;
                 if (useEqd2)
@@ -338,20 +340,21 @@ namespace EQD2Viewer.Services
                 factors[p] = (q, l, cp.Weight, useEqd2);
             }
 
-            // Aggregate per-plan physical doses into a per-voxel EQD2 sum, then
-            // delegate to the shared cumulative-DVH binner. The intermediate
+            // Aggregate per-plan physical doses into a per-voxel sum. A voxel the dose
+            // grids do not cover simply stays at 0 Gy — it is still part of the structure
+            // and is counted as such by the binner and the statistics. The intermediate
             // double[][] is allocated only across slices the structure intersects.
-            var eqd2Slices = new double[sliceCount][];
+            var doseSlices = new double[sliceCount][];
             for (int z = 0; z < sliceCount; z++)
             {
                 bool[] mask = masks[z];
                 if (mask == null) continue;
                 int len = mask.Length;
-                double[] eqd2Slice = new double[len];
+                double[] doseSlice = new double[len];
                 for (int i = 0; i < len; i++)
                 {
                     if (!mask[i]) continue;
-                    double eqd2Sum = 0;
+                    double sum = 0;
                     for (int p = 0; p < planCount; p++)
                     {
                         double[] phys = _perPlanPhysicalSlices[p][z];
@@ -359,15 +362,17 @@ namespace EQD2Viewer.Services
                         double d = phys[i];
                         if (d <= 0) continue;
                         var (eq, el, weight, useEqd2) = factors[p];
-                        double eqd2 = useEqd2 ? (d * d * eq + d * el) : d;
-                        eqd2Sum += eqd2 * weight;
+                        double converted = useEqd2 ? (d * d * eq + d * el) : d;
+                        sum += converted * weight;
                     }
-                    eqd2Slice[i] = eqd2Sum;
+                    doseSlice[i] = sum;
                 }
-                eqd2Slices[z] = eqd2Slice;
+                doseSlices[z] = doseSlice;
             }
 
-            return DVHCalculator.BinToHistogram(eqd2Slices, masks, maxDoseGy);
+            var curve = DVHCalculator.ComputeCumulative(
+                doseSlices, masks, DomainConstants.DvhSamplingResolution, out var statistics);
+            return new StructureDvhResult(structureId, curve, statistics);
         }
 
         private double ComputeReferenceDose(SummationConfig config, double alphaBeta)

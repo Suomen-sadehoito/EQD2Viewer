@@ -10,6 +10,10 @@
         public const int DoseCalibrationRawValue = 10000;
         public const double DvhSamplingResolution = 0.01;
         public const int DvhHistogramBins = 1000;
+
+        /// <summary>Upper bound on fixed-width DVH bins (2000 Gy at 0.01 Gy resolution).
+        /// Only a corrupt dose value could reach it; it exists to bound the allocation.</summary>
+        public const int DvhMaxHistogramBins = 200000;
         public const double PointQuantization = 1000.0;
         public const long PointHashMultiplier = 100000000L;
 

@@ -41,10 +41,14 @@ namespace EQD2Viewer.Core.Interfaces
      IProgress<int>? progress, CancellationToken ct);
 
         /// <summary>
-        /// Computes a cumulative DVH for a specific structure using that structure's own alpha/beta.
+        /// Computes the cumulative DVH and exact voxel statistics of one structure on the
+        /// summed dose: EQD2 with the structure's own alpha/beta when the summation method
+        /// is EQD2, plain physical sum otherwise. The curve uses fixed
+        /// <see cref="DomainConstants.DvhSamplingResolution"/>-wide bins sized to the
+        /// structure's own maximum; statistics come straight from the voxels, never from
+        /// the curve. Returns an empty result for an unknown structure or before compute.
         /// </summary>
-        DoseVolumePoint[] ComputeStructureEQD2DVH(string structureId,
-        double structureAlphaBeta, double maxDoseGy);
+        StructureDvhResult ComputeStructureDVH(string structureId, double structureAlphaBeta);
 
         bool HasSummedDose { get; }
         double[]? GetSummedSlice(int sliceIndex);

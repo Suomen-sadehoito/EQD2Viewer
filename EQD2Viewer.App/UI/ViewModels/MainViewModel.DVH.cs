@@ -56,6 +56,8 @@ namespace EQD2Viewer.App.UI.ViewModels
             }
 
             if (_doseOverlay.IsEQD2Enabled) RecalculateAllDVH();
+            // Newly selected structures get their Σ row/curve too when a summation is active.
+            RefreshSummationDVHIfActive();
             ShowStructureContours = true;
             RefreshPlot();
             RequestRender();
@@ -116,8 +118,11 @@ namespace EQD2Viewer.App.UI.ViewModels
 
         private void OnStructureSettingChanged(object sender, PropertyChangedEventArgs e)
         {
-            if (e.PropertyName == nameof(StructureAlphaBetaItem.AlphaBeta) && _doseOverlay.IsEQD2Enabled)
-                RecalculateAllDVH();
+            if (e.PropertyName != nameof(StructureAlphaBetaItem.AlphaBeta)) return;
+            if (_doseOverlay.IsEQD2Enabled) RecalculateAllDVH();
+            // The Σ row is computed at the structure's α/β, so it must follow the edit as well —
+            // otherwise the table keeps showing a sum for the previous α/β.
+            RefreshSummationDVHIfActive();
         }
 
         internal void UpdatePlotVisibility()
