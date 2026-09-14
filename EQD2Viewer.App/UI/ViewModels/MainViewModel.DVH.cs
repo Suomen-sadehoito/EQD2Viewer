@@ -131,7 +131,8 @@ namespace EQD2Viewer.App.UI.ViewModels
                 if (series.Tag is string tag)
                     series.IsVisible = (tag.StartsWith("Physical_") && _showPhysicalDVH) ||
                                        (tag.StartsWith("EQD2_") && _showEQD2DVH) ||
-                                       tag.StartsWith("Summation_");
+                                       tag.StartsWith("Summation_") ||
+                                       (tag.StartsWith("SummationPlan_") && _showPerPlanSummationDVH);
             PlotModel.InvalidatePlot(true);
         }
 

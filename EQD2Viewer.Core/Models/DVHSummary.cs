@@ -9,5 +9,11 @@
         public double DMean { get; set; }
         public double DMin { get; set; }
         public double Volume { get; set; }
+
+        /// <summary>
+        /// True for rows produced by plan summation (the Σ total and the per-plan Σ rows),
+        /// as opposed to rows built from a single plan's Eclipse DVH curve.
+        /// </summary>
+        public bool IsSummation { get; set; }
     }
 }

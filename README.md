@@ -140,6 +140,13 @@ with Dmax/Dmean/Dmin taken directly from the voxel values rather than read back
 from the plotted curve. A structure that extends beyond a plan's dose grid keeps
 its uncovered part as 0 Gy voxels, which is why such a structure shows Dmin = 0.
 
+Each plan's own contribution to the sum is shown too: thin dotted curves on the
+DVH plot (toggle "Per plan (Σ)" in the DVH panel) and "Σ course / plan" rows in
+Dose Statistics. They come from the same voxels and the same EQD2 conversion as
+the Σ total, so the total is exactly their sum — useful for seeing which plan
+drives a hotspot, and for comparing a plan's voxel-based curve with the Eclipse
+curve of the same plan.
+
 About registrations: **the viewer does not compute any registration.** It reuses
 the ordinary rigid registrations already stored on the patient — the ones made in
 Eclipse's registration workspace during contouring/planning. Only affine (rigid)

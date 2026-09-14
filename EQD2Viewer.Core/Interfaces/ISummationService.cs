@@ -50,6 +50,15 @@ namespace EQD2Viewer.Core.Interfaces
         /// </summary>
         StructureDvhResult ComputeStructureDVH(string structureId, double structureAlphaBeta);
 
+        /// <summary>
+        /// Same as <see cref="ComputeStructureDVH"/> but for one plan's own contribution to
+        /// the sum (its physical dose resampled on the reference grid, converted with its own
+        /// fractionation at the structure's alpha/beta, times its weight). The plan is
+        /// identified by <see cref="SummationPlanEntry.DisplayLabel"/>. Returns an empty
+        /// result for an unknown plan or structure.
+        /// </summary>
+        StructureDvhResult ComputeStructurePlanDVH(string planDisplayLabel, string structureId, double structureAlphaBeta);
+
         bool HasSummedDose { get; }
         double[]? GetSummedSlice(int sliceIndex);
         double SummedReferenceDoseGy { get; }

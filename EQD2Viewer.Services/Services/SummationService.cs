@@ -26,6 +26,7 @@ namespace EQD2Viewer.Services
     /// Post-compute:
     ///   RecomputeEQD2DisplayAsync() -- recalculates display sum with a new alpha/beta.
     ///   ComputeStructureDVH()       -- per-structure DVH + exact statistics with structure-specific alpha/beta.
+    ///   ComputeStructurePlanDVH()   -- the same for one plan's own contribution to the sum.
     ///
     /// Memory: Stores N * W * H * Z * 8 bytes for N plans' physical doses,
     /// plus W * H * Z * 8 bytes for the display EQD2 sum.
@@ -316,6 +317,23 @@ namespace EQD2Viewer.Services
         }
 
         public StructureDvhResult ComputeStructureDVH(string structureId, double structureAlphaBeta)
+            => ComputeStructureDVHCore(structureId, structureAlphaBeta, planIndex: -1);
+
+        public StructureDvhResult ComputeStructurePlanDVH(string planDisplayLabel, string structureId, double structureAlphaBeta)
+        {
+            if (_cachedPlans == null || string.IsNullOrEmpty(planDisplayLabel))
+                return StructureDvhResult.Empty(structureId);
+            int planIndex = _cachedPlans.FindIndex(p => p.Entry.DisplayLabel == planDisplayLabel);
+            if (planIndex < 0) return StructureDvhResult.Empty(structureId);
+            return ComputeStructureDVHCore(structureId, structureAlphaBeta, planIndex);
+        }
+
+        /// <summary>
+        /// Shared implementation: <paramref name="planIndex"/> = -1 sums every plan, otherwise
+        /// only that plan contributes — so the per-plan curves and the Σ curve are guaranteed
+        /// to come from the same conversion and the same voxels.
+        /// </summary>
+        private StructureDvhResult ComputeStructureDVHCore(string structureId, double structureAlphaBeta, int planIndex)
         {
             if (_perPlanPhysicalSlices == null || _structureMasks == null
                 || _cachedPlans == null || _config == null || string.IsNullOrEmpty(structureId))
@@ -324,12 +342,15 @@ namespace EQD2Viewer.Services
                 return StructureDvhResult.Empty(structureId);
 
             int planCount = _cachedPlans.Count;
+            if (planIndex >= planCount) return StructureDvhResult.Empty(structureId);
+            int firstPlan = planIndex < 0 ? 0 : planIndex;
+            int lastPlan = planIndex < 0 ? planCount - 1 : planIndex;
             int sliceCount = Math.Min(_refZ, masks.Length);
 
             // Same per-plan conversion as the display sum, but at the structure's own α/β.
             // Physical mode routes through here too (useEqd2 = false → identity).
             var factors = new (double Q, double L, double Weight, bool UseEqd2)[planCount];
-            for (int p = 0; p < planCount; p++)
+            for (int p = firstPlan; p <= lastPlan; p++)
             {
                 var cp = _cachedPlans[p];
                 bool useEqd2 = _config.Method == SummationMethod.EQD2
@@ -355,7 +376,7 @@ namespace EQD2Viewer.Services
                 {
                     if (!mask[i]) continue;
                     double sum = 0;
-                    for (int p = 0; p < planCount; p++)
+                    for (int p = firstPlan; p <= lastPlan; p++)
                     {
                         double[] phys = _perPlanPhysicalSlices[p][z];
                         if (phys == null) continue;

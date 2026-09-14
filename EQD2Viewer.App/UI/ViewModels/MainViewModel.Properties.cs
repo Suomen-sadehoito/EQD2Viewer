@@ -275,6 +275,10 @@ namespace EQD2Viewer.App.UI.ViewModels
         private bool _showEQD2DVH = true;
         public bool ShowEQD2DVH { get => _showEQD2DVH; set { if (SetProperty(ref _showEQD2DVH, value)) UpdatePlotVisibility(); } }
 
+        /// <summary>In summation mode, also show each plan's own contribution (thin dotted curves).</summary>
+        private bool _showPerPlanSummationDVH = true;
+        public bool ShowPerPlanSummationDVH { get => _showPerPlanSummationDVH; set { if (SetProperty(ref _showPerPlanSummationDVH, value)) UpdatePlotVisibility(); } }
+
         public PlotModel PlotModel { get; private set; } = null!;
         public ObservableCollection<DVHSummary> SummaryData { get; } = new ObservableCollection<DVHSummary>();
         public ObservableCollection<StructureAlphaBetaItem> StructureSettings { get; } = new ObservableCollection<StructureAlphaBetaItem>();

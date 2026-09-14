@@ -468,6 +468,9 @@
 							<StackPanel Orientation="Horizontal">
 								<CheckBox Content=" Physical" Style="{StaticResource Check}" Margin="0,0,16,0" IsChecked="{Binding ShowPhysicalDVH}"/>
 								<CheckBox Content=" EQD2" Style="{StaticResource Check}" IsChecked="{Binding ShowEQD2DVH}"/>
+								<CheckBox Content=" Per plan (Σ)" Style="{StaticResource Check}" Margin="16,0,0,0" IsChecked="{Binding ShowPerPlanSummationDVH}"
+                                          Visibility="{Binding IsSummationActive, Converter={StaticResource BoolToVis}}"
+                                          ToolTip="Also plot each plan's own contribution to the summed DVH (thin dotted curves). The 'Σ plan' rows in Dose Statistics stay listed either way."/>
 							</StackPanel>
 						</StackPanel>
 					</Border>

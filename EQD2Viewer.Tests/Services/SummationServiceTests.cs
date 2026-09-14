@@ -557,6 +557,82 @@ namespace EQD2Viewer.Tests.Services
             result.Curve.First(p => p.DoseGy > 91.9).VolumePercent.Should().Be(100.0);
         }
 
+        // ── Per-plan contribution ─────────────────────────────────────────
+
+        [Fact]
+        public async Task ComputeStructurePlanDVH_PhysicalMode_ReturnsEachPlansOwnContribution()
+        {
+            var loader = new Mock<ISummationDataLoader>(MockBehavior.Strict);
+            loader.Setup(l => l.LoadPlanDose("C1", "PlanRef", It.IsAny<double>())).Returns(MakeDoseData(FillDose(3)));
+            loader.Setup(l => l.LoadPlanDose("C1", "PlanMov", It.IsAny<double>())).Returns(MakeDoseData(FillDose(7)));
+            loader.Setup(l => l.GetPlanImageFOR("C1", "PlanRef")).Returns("FOR_REF");
+            loader.Setup(l => l.GetPlanImageFOR("C1", "PlanMov")).Returns("FOR_REF");
+            loader.Setup(l => l.LoadStructureContours(It.IsAny<string>(), It.IsAny<string>()))
+                  .Returns(new List<StructureData>
+                  {
+                      new StructureData { Id = "BODY", DicomType = "EXTERNAL", ContoursBySlice = BuildWholeVolumeStructure() }
+                  });
+
+            var svc = new SummationService(MakeReferenceCt(), loader.Object, new List<RegistrationData>());
+            svc.PrepareData(MakeConfig()).Success.Should().BeTrue();   // labels "Ref" and "Mov"
+            await svc.ComputeAsync(null, CancellationToken.None);
+
+            var refPart = svc.ComputeStructurePlanDVH("Ref", "BODY", structureAlphaBeta: 3.0);
+            var movPart = svc.ComputeStructurePlanDVH("Mov", "BODY", structureAlphaBeta: 3.0);
+            var total = svc.ComputeStructureDVH("BODY", structureAlphaBeta: 3.0);
+
+            refPart.Statistics.DMaxGy.Should().BeApproximately(3, 1e-9);
+            refPart.Statistics.VoxelCount.Should().Be(RefX * RefY * RefZ);
+            movPart.Statistics.DMaxGy.Should().BeApproximately(7, 1e-9);
+            total.Statistics.DMaxGy.Should().BeApproximately(10, 1e-9, "the Σ curve is the sum of the per-plan parts");
+            refPart.Curve.Last().VolumePercent.Should().Be(0.0);
+
+            svc.ComputeStructurePlanDVH("NoSuchPlan", "BODY", 3.0).IsEmpty.Should().BeTrue();
+            svc.ComputeStructurePlanDVH("Ref", "NoSuchStructure", 3.0).IsEmpty.Should().BeTrue();
+        }
+
+        [Fact]
+        public async Task ComputeStructurePlanDVH_EQD2Mode_ConvertsEachPlanWithItsOwnFractionation()
+        {
+            // Ref: 20 Gy in 1 fraction → EQD2(α/β=3) = 20·(20+3)/5 = 92 Gy.
+            // Mov: 20 Gy in 10 fractions (2 Gy/fx) → EQD2 = 20 Gy at any α/β.
+            var loader = new Mock<ISummationDataLoader>(MockBehavior.Strict);
+            loader.Setup(l => l.LoadPlanDose("C1", "PlanRef", It.IsAny<double>())).Returns(MakeDoseData(FillDose(20)));
+            loader.Setup(l => l.LoadPlanDose("C1", "PlanMov", It.IsAny<double>())).Returns(MakeDoseData(FillDose(20)));
+            loader.Setup(l => l.GetPlanImageFOR("C1", "PlanRef")).Returns("FOR_REF");
+            loader.Setup(l => l.GetPlanImageFOR("C1", "PlanMov")).Returns("FOR_REF");
+            loader.Setup(l => l.LoadStructureContours(It.IsAny<string>(), It.IsAny<string>()))
+                  .Returns(new List<StructureData>
+                  {
+                      new StructureData { Id = "OAR", DicomType = "ORGAN", ContoursBySlice = BuildWholeVolumeStructure() }
+                  });
+
+            var svc = new SummationService(MakeReferenceCt(), loader.Object, new List<RegistrationData>());
+            var config = new SummationConfig
+            {
+                Method = SummationMethod.EQD2,
+                GlobalAlphaBeta = 10.0,
+                Plans = new List<SummationPlanEntry>
+                {
+                    new SummationPlanEntry { CourseId = "C1", PlanId = "PlanRef", DisplayLabel = "C1 / PlanRef",
+                        NumberOfFractions = 1, TotalDoseGy = 20, Weight = 1.0, IsReference = true },
+                    new SummationPlanEntry { CourseId = "C1", PlanId = "PlanMov", DisplayLabel = "C1 / PlanMov",
+                        NumberOfFractions = 10, TotalDoseGy = 20, Weight = 1.0, IsReference = false }
+                }
+            };
+            svc.PrepareData(config).Success.Should().BeTrue();
+            await svc.ComputeAsync(null, CancellationToken.None);
+
+            var refPart = svc.ComputeStructurePlanDVH("C1 / PlanRef", "OAR", structureAlphaBeta: 3.0);
+            var movPart = svc.ComputeStructurePlanDVH("C1 / PlanMov", "OAR", structureAlphaBeta: 3.0);
+            var total = svc.ComputeStructureDVH("OAR", structureAlphaBeta: 3.0);
+
+            refPart.Statistics.DMaxGy.Should().BeApproximately(92, 1e-9);
+            movPart.Statistics.DMaxGy.Should().BeApproximately(20, 1e-9);
+            total.Statistics.DMaxGy.Should().BeApproximately(112, 1e-9);
+            total.Statistics.DMeanGy.Should().BeApproximately(112, 1e-9);
+        }
+
         /// <summary>
         /// Physical mode goes through the same method as EQD2 mode: plans are summed with
         /// their weights and no fractionation conversion.

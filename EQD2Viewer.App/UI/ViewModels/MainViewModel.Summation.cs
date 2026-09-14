@@ -297,7 +297,8 @@ namespace EQD2Viewer.App.UI.ViewModels
                     DMax = result.Statistics.DMaxGy,
                     DMean = result.Statistics.DMeanGy,
                     DMin = result.Statistics.DMinGy,
-                    Volume = volumeCc
+                    Volume = volumeCc,
+                    IsSummation = true
                 });
 
                 OxyColor color = cached != null
@@ -314,15 +315,51 @@ namespace EQD2Viewer.App.UI.ViewModels
                 };
                 series.Points.AddRange(result.Curve.Select(p => new DataPoint(p.DoseGy, p.VolumePercent)));
                 PlotModel.Series.Add(series);
+
+                // Each plan's own contribution to the sum, from the same conversion and the same
+                // voxels — so the user can see what the Σ curve is made of. Thin dotted lines,
+                // toggled by ShowPerPlanSummationDVH; rows are labelled "Σ <plan>".
+                if (_activeSummationConfig != null)
+                {
+                    foreach (var plan in _activeSummationConfig.Plans)
+                    {
+                        var planResult = _summationService.ComputeStructurePlanDVH(plan.DisplayLabel, structureId, structureAlphaBeta);
+                        if (planResult.IsEmpty) continue;
+
+                        SummaryData.Add(new DVHSummary
+                        {
+                            StructureId = structureId,
+                            PlanId = $"Σ {plan.DisplayLabel}",
+                            Type = methodLabel,
+                            DMax = planResult.Statistics.DMaxGy,
+                            DMean = planResult.Statistics.DMeanGy,
+                            DMin = planResult.Statistics.DMinGy,
+                            Volume = volumeCc,
+                            IsSummation = true
+                        });
+
+                        var planSeries = new LineSeries
+                        {
+                            Title = $"{structureId} Σ {plan.DisplayLabel} ({methodLabel})",
+                            Tag = $"SummationPlan_{plan.DisplayLabel}_{structureId}",
+                            Color = color,
+                            StrokeThickness = 1.2,
+                            LineStyle = LineStyle.Dot
+                        };
+                        planSeries.Points.AddRange(planResult.Curve.Select(p => new DataPoint(p.DoseGy, p.VolumePercent)));
+                        PlotModel.Series.Add(planSeries);
+                    }
+                }
             }
             RefreshPlot();
         }
 
         private void ClearSummationDVH()
         {
-            foreach (var s in PlotModel.Series.Where(s => (s.Tag as string)?.StartsWith("Summation_") ?? false).ToList())
+            // Both the Σ total ("Summation_") and the per-plan ("SummationPlan_") series.
+            foreach (var s in PlotModel.Series.Where(s => (s.Tag as string)?.StartsWith("Summation") ?? false).ToList())
                 PlotModel.Series.Remove(s);
-            foreach (var s in SummaryData.Where(s => s.PlanId == "Summation").ToList())
+            foreach (var s in SummaryData.Where(s => s.IsSummation).ToList())
                 SummaryData.Remove(s);
         }
 
