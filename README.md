@@ -213,10 +213,17 @@ the numbers are clinically correct.
 
 ## Status
 
-**0.9.4-beta** (April 2026).
+**0.9.5-beta** (September 2026).
 
+- 0.9.5 fixes the summation DVH Dmax: a structure with any voxel outside the
+  dose grid (or at 0 Gy) reported ≈ 1.1 × the global summed maximum as its Dmax,
+  independent of α/β. Σ statistics now come straight from the voxels, each
+  plan's own contribution is plotted, single-plan summation is allowed for
+  validation against the Eclipse DVH, the "Simple" EQD2 Dmean is gone, and the
+  Dose Statistics table shows the source of every row.
+- 0.9.4 pulled the deformable module back out and narrowed the scope to
+  affine-only summation.
 - 0.9.2 / 0.9.3 added a SimpleITK deformable registration module.
-- 0.9.4 pulled it back out and narrowed the scope to affine-only summation.
 - Earlier 0.x betas were the project-layout split and the first feature work.
 
 ## Authors
