@@ -557,6 +557,193 @@ namespace EQD2Viewer.Tests.Services
             result.Curve.First(p => p.DoseGy > 91.9).VolumePercent.Should().Be(100.0);
         }
 
+        // ── Mask placement ─────────────────────────────────────────────────
+
+        /// <summary>
+        /// Regression: contours are keyed by the slice index of the image the structure set
+        /// was drawn on, which is not necessarily the reference CT (same frame of reference,
+        /// other series). Masks used to be placed by that key; they must be placed by the
+        /// contour's world z against the reference CT geometry. Here the structure set's
+        /// image starts 2 mm below the reference CT, so its slice k is the CT's slice k − 2.
+        /// </summary>
+        [Fact]
+        public async Task CacheStructureMasks_ContourKeyedByForeignSliceIndex_PlacedByWorldZ()
+        {
+            const int ctZ = 6;
+            // Dose: 10 Gy on CT slices 0-1 only (plane index 2 = 2 mm → zero), so a correctly placed
+            // mask on CT slices 0-1 reads 10 Gy and a mask misplaced by +2 slices reads 0 Gy.
+            var dose = new int[ctZ][,];
+            for (int z = 0; z < ctZ; z++) dose[z] = TestVolumeFactory.FillDose(RefX, RefY, 1, z < 2 ? 10 : 0)[0];
+
+            // Structure set image origin z = -2 mm: its slices 2 and 3 are world z = 0 and 1 mm,
+            // i.e. reference CT slices 0 and 1. The dictionary keys are 2 and 3.
+            var contours = new Dictionary<int, List<double[][]>>();
+            foreach (int foreignSlice in new[] { 2, 3 })
+            {
+                double worldZ = foreignSlice - 2.0;
+                contours[foreignSlice] = new List<double[][]>
+                {
+                    new[]
+                    {
+                        new[] { -0.5, -0.5, worldZ }, new[] { 3.6, -0.5, worldZ },
+                        new[] { 3.6, 3.6, worldZ }, new[] { -0.5, 3.6, worldZ }
+                    }
+                };
+            }
+
+            var loader = new Mock<ISummationDataLoader>(MockBehavior.Strict);
+            loader.Setup(l => l.LoadPlanDose("C1", "PlanRef", It.IsAny<double>()))
+                  .Returns(TestVolumeFactory.MakeSummationDoseData(dose, RefX, RefY, ctZ));
+            loader.Setup(l => l.GetPlanImageFOR("C1", "PlanRef")).Returns("FOR_REF");
+            loader.Setup(l => l.LoadStructureContours(It.IsAny<string>(), It.IsAny<string>()))
+                  .Returns(new List<StructureData>
+                  {
+                      new StructureData { Id = "Cord", DicomType = "ORGAN", ContoursBySlice = contours }
+                  });
+
+            var svc = new SummationService(TestVolumeFactory.MakeCt(RefX, RefY, ctZ, "FOR_REF"), loader.Object, new List<RegistrationData>());
+            var config = new SummationConfig
+            {
+                Method = SummationMethod.Physical,
+                GlobalAlphaBeta = 3.0,
+                Plans = new List<SummationPlanEntry>
+                {
+                    new SummationPlanEntry { CourseId = "C1", PlanId = "PlanRef", DisplayLabel = "Ref",
+                        NumberOfFractions = 5, TotalDoseGy = 10, Weight = 1.0, IsReference = true }
+                }
+            };
+            svc.PrepareData(config).Success.Should().BeTrue();
+            await svc.ComputeAsync(null, CancellationToken.None);
+
+            var result = svc.ComputeStructureDVH("Cord", structureAlphaBeta: 3.0);
+
+            result.Statistics.VoxelCount.Should().Be(RefX * RefY * 2, "two contoured slices");
+            result.Statistics.DMinGy.Should().BeApproximately(10, 1e-9,
+                "the mask must land on CT slices 0-1 (10 Gy), not on slices 2-3 (0 Gy) where the foreign keys point");
+            result.Statistics.DMaxGy.Should().BeApproximately(10, 1e-9);
+        }
+
+        [Fact]
+        public async Task CacheStructureMasks_ContourOutsideReferenceCt_IsDropped()
+        {
+            // A contour at world z = 10 mm on a 2-slice CT (0..1 mm) has no slice to land on.
+            var contours = new Dictionary<int, List<double[][]>>
+            {
+                [0] = new List<double[][]>
+                {
+                    new[] { new[] { -0.5, -0.5, 10.0 }, new[] { 3.6, -0.5, 10.0 }, new[] { 3.6, 3.6, 10.0 }, new[] { -0.5, 3.6, 10.0 } }
+                }
+            };
+            var loader = new Mock<ISummationDataLoader>(MockBehavior.Strict);
+            loader.Setup(l => l.LoadPlanDose("C1", "PlanRef", It.IsAny<double>())).Returns(MakeDoseData(FillDose(10)));
+            loader.Setup(l => l.GetPlanImageFOR("C1", "PlanRef")).Returns("FOR_REF");
+            loader.Setup(l => l.LoadStructureContours(It.IsAny<string>(), It.IsAny<string>()))
+                  .Returns(new List<StructureData> { new StructureData { Id = "Far", ContoursBySlice = contours } });
+
+            var svc = new SummationService(MakeReferenceCt(), loader.Object, new List<RegistrationData>());
+            var config = new SummationConfig
+            {
+                Method = SummationMethod.Physical, GlobalAlphaBeta = 3.0,
+                Plans = new List<SummationPlanEntry>
+                {
+                    new SummationPlanEntry { CourseId = "C1", PlanId = "PlanRef", DisplayLabel = "Ref",
+                        NumberOfFractions = 5, TotalDoseGy = 10, Weight = 1.0, IsReference = true }
+                }
+            };
+            svc.PrepareData(config).Success.Should().BeTrue();
+            await svc.ComputeAsync(null, CancellationToken.None);
+
+            svc.GetCachedStructureIds().Should().NotContain("Far", "a structure with no contour on this CT gets no mask");
+            svc.ComputeStructureDVH("Far", 3.0).IsEmpty.Should().BeTrue();
+        }
+
+        // ── Plan weight ────────────────────────────────────────────────────
+
+        /// <summary>
+        /// Weight scales a plan's contribution after EQD2 conversion (it means "fraction of
+        /// the course delivered": dose per fraction is unchanged). Pinned so a refactor that
+        /// scaled the physical dose before conversion — a different number — is caught.
+        /// </summary>
+        [Fact]
+        public async Task ComputeStructureDVH_PlanWeight_ScalesContributionAfterEQD2Conversion()
+        {
+            var loader = new Mock<ISummationDataLoader>(MockBehavior.Strict);
+            loader.Setup(l => l.LoadPlanDose("C1", "PlanRef", It.IsAny<double>())).Returns(MakeDoseData(FillDose(0)));
+            loader.Setup(l => l.LoadPlanDose("C1", "PlanMov", It.IsAny<double>())).Returns(MakeDoseData(FillDose(20)));
+            loader.Setup(l => l.GetPlanImageFOR("C1", "PlanRef")).Returns("FOR_REF");
+            loader.Setup(l => l.GetPlanImageFOR("C1", "PlanMov")).Returns("FOR_REF");
+            loader.Setup(l => l.LoadStructureContours(It.IsAny<string>(), It.IsAny<string>()))
+                  .Returns(new List<StructureData>
+                  {
+                      new StructureData { Id = "OAR", DicomType = "ORGAN", ContoursBySlice = BuildWholeVolumeStructure() }
+                  });
+
+            var svc = new SummationService(MakeReferenceCt(), loader.Object, new List<RegistrationData>());
+            var config = new SummationConfig
+            {
+                Method = SummationMethod.EQD2,
+                GlobalAlphaBeta = 3.0,
+                Plans = new List<SummationPlanEntry>
+                {
+                    new SummationPlanEntry { CourseId = "C1", PlanId = "PlanRef", DisplayLabel = "Ref",
+                        NumberOfFractions = 5, TotalDoseGy = 10, Weight = 1.0, IsReference = true },
+                    new SummationPlanEntry { CourseId = "C1", PlanId = "PlanMov", DisplayLabel = "Mov",
+                        NumberOfFractions = 1, TotalDoseGy = 20, Weight = 0.5, IsReference = false }
+                }
+            };
+            svc.PrepareData(config).Success.Should().BeTrue();
+            var computed = await svc.ComputeAsync(null, CancellationToken.None);
+
+            // EQD2(20 Gy / 1 fx, α/β 3) = 20·(20+3)/5 = 92 Gy; × 0.5 = 46 Gy.
+            // Scaling the dose first would give EQD2(10 Gy / 1 fx) = 10·13/5 = 26 Gy.
+            computed.MaxDoseGy.Should().BeApproximately(46, 1e-9, "display sum");
+            svc.ComputeStructurePlanDVH("Mov", "OAR", 3.0).Statistics.DMaxGy.Should().BeApproximately(46, 1e-9, "per-plan row");
+            svc.ComputeStructureDVH("OAR", 3.0).Statistics.DMaxGy.Should().BeApproximately(46, 1e-9, "Σ row");
+        }
+
+        [Fact]
+        public async Task ComputeStructurePlanDVH_HeterogeneousDose_DmeansAddUpAndDmaxDoesNot()
+        {
+            // Ref: gradient 0/10/20/30 Gy along x. Mov: 7 Gy everywhere, weight 0.5 → 3.5 Gy.
+            var refDose = new int[RefZ][,];
+            for (int z = 0; z < RefZ; z++)
+            {
+                refDose[z] = new int[RefX, RefY];
+                for (int y = 0; y < RefY; y++)
+                    for (int x = 0; x < RefX; x++)
+                        refDose[z][x, y] = x * 10;
+            }
+            var loader = new Mock<ISummationDataLoader>(MockBehavior.Strict);
+            loader.Setup(l => l.LoadPlanDose("C1", "PlanRef", It.IsAny<double>())).Returns(MakeDoseData(refDose));
+            loader.Setup(l => l.LoadPlanDose("C1", "PlanMov", It.IsAny<double>())).Returns(MakeDoseData(FillDose(7)));
+            loader.Setup(l => l.GetPlanImageFOR("C1", "PlanRef")).Returns("FOR_REF");
+            loader.Setup(l => l.GetPlanImageFOR("C1", "PlanMov")).Returns("FOR_REF");
+            loader.Setup(l => l.LoadStructureContours(It.IsAny<string>(), It.IsAny<string>()))
+                  .Returns(new List<StructureData>
+                  {
+                      new StructureData { Id = "BODY", DicomType = "EXTERNAL", ContoursBySlice = BuildWholeVolumeStructure() }
+                  });
+
+            var svc = new SummationService(MakeReferenceCt(), loader.Object, new List<RegistrationData>());
+            var config = MakeConfig();
+            config.Plans[1].Weight = 0.5;
+            svc.PrepareData(config).Success.Should().BeTrue();
+            await svc.ComputeAsync(null, CancellationToken.None);
+
+            var refPart = svc.ComputeStructurePlanDVH("Ref", "BODY", 3.0).Statistics;
+            var movPart = svc.ComputeStructurePlanDVH("Mov", "BODY", 3.0).Statistics;
+            var total = svc.ComputeStructureDVH("BODY", 3.0).Statistics;
+
+            refPart.DMeanGy.Should().BeApproximately(15, 1e-9);
+            movPart.DMeanGy.Should().BeApproximately(3.5, 1e-9);
+            // Each voxel of the Σ sum is the sum of the per-plan voxels, so the means add exactly …
+            total.DMeanGy.Should().BeApproximately(refPart.DMeanGy + movPart.DMeanGy, 1e-9);
+            // … while max/min are bounded by, not equal to, the sums of the parts in general.
+            total.DMaxGy.Should().BeApproximately(33.5, 1e-9);
+            total.DMaxGy.Should().BeLessOrEqualTo(refPart.DMaxGy + movPart.DMaxGy + 1e-9);
+            total.DMinGy.Should().BeApproximately(3.5, 1e-9);
+        }
+
         // ── Per-plan contribution ─────────────────────────────────────────
 
         [Fact]
@@ -584,7 +771,8 @@ namespace EQD2Viewer.Tests.Services
             refPart.Statistics.DMaxGy.Should().BeApproximately(3, 1e-9);
             refPart.Statistics.VoxelCount.Should().Be(RefX * RefY * RefZ);
             movPart.Statistics.DMaxGy.Should().BeApproximately(7, 1e-9);
-            total.Statistics.DMaxGy.Should().BeApproximately(10, 1e-9, "the Σ curve is the sum of the per-plan parts");
+            total.Statistics.DMaxGy.Should().BeApproximately(10, 1e-9,
+                "for a uniform dose the Σ Dmax equals the sum of the per-plan Dmax");
             refPart.Curve.Last().VolumePercent.Should().Be(0.0);
 
             svc.ComputeStructurePlanDVH("NoSuchPlan", "BODY", 3.0).IsEmpty.Should().BeTrue();

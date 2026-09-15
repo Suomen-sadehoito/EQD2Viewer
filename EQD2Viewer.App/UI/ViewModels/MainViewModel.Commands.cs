@@ -131,9 +131,14 @@ namespace EQD2Viewer.App.UI.ViewModels
         [RelayCommand]
         private void CalculateEQD2()
         {
+            // Setting IsEQD2Enabled raises EQD2EnabledChanged, whose handler already runs
+            // RecalculateAllDVH when structures are loaded; call it directly only when the
+            // flag was already on (no event fires then). Σ rows do not depend on this flag —
+            // they use each plan's own fractionation and the structure α/β — so they are not
+            // touched here.
+            bool wasEnabled = IsEQD2Enabled;
             IsEQD2Enabled = true;
-            RecalculateAllDVH();
-            RefreshSummationDVHIfActive();
+            if (wasEnabled) RecalculateAllDVH();
         }
 
         [RelayCommand]

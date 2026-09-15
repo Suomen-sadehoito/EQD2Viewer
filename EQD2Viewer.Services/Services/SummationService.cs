@@ -631,41 +631,56 @@ namespace EQD2Viewer.Services
             double imgOx = _referenceCtImage.Origin.X, imgOy = _referenceCtImage.Origin.Y, imgOz = _referenceCtImage.Origin.Z;
             double xDirX = _referenceCtImage.XDirection.X, xDirY = _referenceCtImage.XDirection.Y, xDirZ = _referenceCtImage.XDirection.Z;
             double yDirX = _referenceCtImage.YDirection.X, yDirY = _referenceCtImage.YDirection.Y, yDirZ = _referenceCtImage.YDirection.Z;
-            double xRes = _referenceCtImage.XRes, yRes = _referenceCtImage.YRes;
+            double zDirX = _referenceCtImage.ZDirection.X, zDirY = _referenceCtImage.ZDirection.Y, zDirZ = _referenceCtImage.ZDirection.Z;
+            double xRes = _referenceCtImage.XRes, yRes = _referenceCtImage.YRes, zRes = _referenceCtImage.ZRes;
 
             foreach (var structure in structures)
             {
                 if (structure.IsEmpty) continue;
                 try
                 {
-                    bool[][] sliceMasks = new bool[_refZ][];
-                    bool hasAnyContour = false;
-                    for (int z = 0; z < _refZ; z++)
+                    // Contours are keyed by the slice index of the image the structure set was
+                    // drawn on. That image is not necessarily this reference CT (same frame of
+                    // reference, other series: a 4D phase, a contrast scan, a cropped copy), so the
+                    // key cannot be trusted as a slice index here. Every contour point carries its
+                    // world z, so the target slice is derived from it against this CT's geometry —
+                    // the same way x and y already are.
+                    var polygonsBySlice = new Dictionary<int, List<bool[]>>();
+                    foreach (var kv in structure.ContoursBySlice)
                     {
-                        if (!structure.ContoursBySlice.TryGetValue(z, out var contourList) || contourList == null || contourList.Count == 0)
-                        { sliceMasks[z] = null!; continue; }
-                        hasAnyContour = true;
-                        var masks = new List<bool[]>();
+                        var contourList = kv.Value;
+                        if (contourList == null) continue;
                         foreach (var contour in contourList)
                         {
-                            if (contour.Length < 3) continue;
+                            if (contour == null || contour.Length < 3) continue;
+
+                            double dx0 = contour[0][0] - imgOx, dy0 = contour[0][1] - imgOy, dz0 = contour[0][2] - imgOz;
+                            double fz = (dx0 * zDirX + dy0 * zDirY + dz0 * zDirZ) / zRes;
+                            if (double.IsNaN(fz)) continue;
+                            int z = (int)Math.Round(fz);
+                            if (z < 0 || z >= _refZ) continue;   // contour lies outside this CT's extent
+
                             var pixelPoints = new Point2D[contour.Length];
                             for (int i = 0; i < contour.Length; i++)
                             {
                                 double dx = contour[i][0] - imgOx, dy = contour[i][1] - imgOy, dz = contour[i][2] - imgOz;
                                 pixelPoints[i] = new Point2D(
-                                       (dx * xDirX + dy * xDirY + dz * xDirZ) / xRes,
-                                 (dx * yDirX + dy * yDirY + dz * yDirZ) / yRes);
+                                    (dx * xDirX + dy * xDirY + dz * xDirZ) / xRes,
+                                    (dx * yDirX + dy * yDirY + dz * yDirZ) / yRes);
                             }
+                            if (!polygonsBySlice.TryGetValue(z, out var masks))
+                                polygonsBySlice[z] = masks = new List<bool[]>();
                             masks.Add(StructureRasterizer.RasterizePolygon(pixelPoints, _refW, _refH));
                         }
-                        sliceMasks[z] = StructureRasterizer.CombineContourMasks(masks, _refW, _refH);
                     }
-                    if (hasAnyContour)
-                    {
-                        _structureMasks[structure.Id] = sliceMasks;
-                        _cachedStructureIds.Add(structure.Id);
-                    }
+                    if (polygonsBySlice.Count == 0) continue;
+
+                    bool[][] sliceMasks = new bool[_refZ][];
+                    foreach (var kv in polygonsBySlice)
+                        sliceMasks[kv.Key] = StructureRasterizer.CombineContourMasks(kv.Value, _refW, _refH);
+
+                    _structureMasks[structure.Id] = sliceMasks;
+                    _cachedStructureIds.Add(structure.Id);
                 }
                 catch (Exception ex) { SimpleLogger.Warning($"Could not rasterize structure '{structure.Id}': {ex.Message}"); }
             }

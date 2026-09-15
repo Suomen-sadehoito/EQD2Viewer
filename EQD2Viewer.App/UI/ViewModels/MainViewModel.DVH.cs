@@ -63,17 +63,6 @@ namespace EQD2Viewer.App.UI.ViewModels
             RequestRender();
         }
 
-        public void ClearDVH()
-        {
-            _dvhCache.Clear();
-            _visibleStructureIds.Clear();
-            StructureSettings.Clear();
-            PlotModel.Series.Clear();
-            SummaryData.Clear();
-            RefreshPlot();
-            RequestRender();
-        }
-
         internal void RecalculateAllDVH()
         {
             var oldSeries = PlotModel.Series.Where(s => (s.Tag as string)?.StartsWith("EQD2_") ?? false).ToList();

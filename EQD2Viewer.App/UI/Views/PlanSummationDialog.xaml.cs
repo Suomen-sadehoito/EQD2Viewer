@@ -16,15 +16,21 @@ namespace EQD2Viewer.App.UI.Views
         private readonly List<CourseData> _courses;
         private readonly List<RegistrationData> _registrations;
         private readonly PlanData _currentPlan;
+        private readonly string _openImageId;
+        private readonly string _openImageFOR;
         private List<RegistrationInfo> _allRegistrations;
 
         public ObservableCollection<PlanRowItem> PlanRows { get; } = new ObservableCollection<PlanRowItem>();
         public SummationConfig? ResultConfig { get; private set; }
 
+        /// <param name="openImage">The CT the viewer was started on — the grid every sum is built on.
+        /// Its id and frame of reference come from the image itself, not from the plan list, so the
+        /// reference-plan check below works even when the open plan has no dose.</param>
         public PlanSummationDialog(
             List<CourseData> courses,
             List<RegistrationData> registrations,
-            PlanData currentPlan)
+            PlanData currentPlan,
+            VolumeData? openImage)
         {
             InitializeComponent();
             DataContext = this;
@@ -32,6 +38,8 @@ namespace EQD2Viewer.App.UI.Views
             _courses = courses ?? new List<CourseData>();
             _registrations = registrations ?? new List<RegistrationData>();
             _currentPlan = currentPlan;
+            _openImageId = openImage?.Geometry?.Id ?? "";
+            _openImageFOR = openImage?.FOR ?? "";
             _allRegistrations = IndexAllRegistrations();
 
             PopulatePlans();
@@ -214,26 +222,44 @@ namespace EQD2Viewer.App.UI.Views
 
             var refPlan = includedPlans.First(p => p.IsReference);
 
-            // The sum is always built on the CT of the plan that is open in Eclipse (the snapshot's
-            // CT image): structure masks are rasterised on that grid and the reference plan's dose
-            // is sampled on it without any registration. A reference plan on another frame of
-            // reference would silently put every mask and dose sample in the wrong place, so refuse
-            // that combination instead of producing a plausible-looking wrong sum.
-            if (_currentPlan != null)
+            // The sum is always built on the CT the viewer was opened on: the reference plan's dose
+            // is sampled on that grid without any registration. A reference plan on another frame
+            // of reference would put every dose sample in the wrong place, so refuse it. A reference
+            // plan on another image *series* in the same frame is accepted — masks and dose are
+            // both placed by world coordinates — but the user is told, because the structure set
+            // being summed is then not the one drawn on the CT they are looking at.
+            bool refIsOpenPlan = _currentPlan != null
+                && refPlan.PlanId == _currentPlan.Id && refPlan.CourseId == _currentPlan.CourseId;
+            if (!refIsOpenPlan)
             {
-                var openRow = PlanRows.FirstOrDefault(r => r.PlanId == _currentPlan.Id && r.CourseId == _currentPlan.CourseId);
-                string openFOR = openRow?.ImageFOR ?? "";
-                bool refIsOpenPlan = refPlan.PlanId == _currentPlan.Id && refPlan.CourseId == _currentPlan.CourseId;
-                if (!refIsOpenPlan && !string.IsNullOrEmpty(openFOR) && !string.IsNullOrEmpty(refPlan.ImageFOR)
-                    && !string.Equals(refPlan.ImageFOR, openFOR, StringComparison.OrdinalIgnoreCase))
+                if (string.IsNullOrEmpty(_openImageFOR) || string.IsNullOrEmpty(refPlan.ImageFOR))
+                {
+                    if (MessageBox.Show(
+                            $"Cannot verify that plan '{refPlan.CourseId} / {refPlan.PlanId}' is on the same CT " +
+                            "as the image open in the viewer (frame of reference unknown).\n\n" +
+                            "If it is not, the sum will be placed on the wrong anatomy.\n\nContinue anyway?",
+                            "Summation setup", MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.No)
+                        return;
+                }
+                else if (!string.Equals(refPlan.ImageFOR, _openImageFOR, StringComparison.OrdinalIgnoreCase))
                 {
                     MessageBox.Show(
-                        $"Plan '{refPlan.CourseId} / {refPlan.PlanId}' is on a different CT than the plan open in Eclipse " +
-                        $"('{_currentPlan.CourseId} / {_currentPlan.Id}').\n\n" +
-                        "The sum is always computed on the open plan's CT grid, so the reference plan must share that CT.\n\n" +
+                        $"Plan '{refPlan.CourseId} / {refPlan.PlanId}' is on a different CT than the image open in the viewer.\n\n" +
+                        "The sum is always computed on the open CT grid, so the reference plan must share that CT.\n\n" +
                         "Either open that plan in Eclipse and start the viewer from it, or choose the open plan as the reference.",
                         "Summation setup", MessageBoxButton.OK, MessageBoxImage.Warning);
                     return;
+                }
+                else if (!string.IsNullOrEmpty(_openImageId) && !string.IsNullOrEmpty(refPlan.ImageId)
+                    && !string.Equals(refPlan.ImageId, _openImageId, StringComparison.OrdinalIgnoreCase))
+                {
+                    if (MessageBox.Show(
+                            $"Plan '{refPlan.CourseId} / {refPlan.PlanId}' was planned on image '{refPlan.ImageId}', " +
+                            $"while the viewer is showing image '{_openImageId}' (same frame of reference).\n\n" +
+                            "Its structures will be placed on the open CT by their coordinates, but they were drawn on " +
+                            "a different scan.\n\nContinue anyway?",
+                            "Summation setup", MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.No)
+                        return;
                 }
             }
 

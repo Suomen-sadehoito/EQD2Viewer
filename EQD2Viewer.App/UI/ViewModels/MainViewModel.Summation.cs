@@ -57,7 +57,8 @@ namespace EQD2Viewer.App.UI.ViewModels
             var dialog = new PlanSummationDialog(
                 _snapshot.AllCourses,
                 _snapshot.Registrations,
-                _snapshot.ActivePlan);
+                _snapshot.ActivePlan,
+                _snapshot.CtImage);
             dialog.Owner = Application.Current.Windows.OfType<Window>().FirstOrDefault(w => w.IsActive);
             if (dialog.ShowDialog() == true && dialog.ResultConfig != null)
                 await ExecuteSummationAsync(dialog.ResultConfig);
@@ -106,16 +107,25 @@ namespace EQD2Viewer.App.UI.ViewModels
             SummationProgress = 0;
             SummationInfo = "Loading plan data...";
 
+            bool succeeded = false;
             try
             {
+                // The previous summation is gone from here on. Its Σ rows and curves must not
+                // outlive it: if this attempt fails or is cancelled, nothing may keep showing
+                // numbers that no service can recompute.
                 _summationService?.Dispose();
+                _summationService = null;
+                _activeSummationConfig = null;
+                IsSummationActive = false;
+                ClearSummationDVH();
+
                 _summationService = _summationServiceFactory!.Create(
                     _snapshot.CtImage!, _summationDataLoader!, _snapshot.Registrations);
                 var prepResult = _summationService.PrepareData(config);
                 if (!prepResult.Success)
                 {
                     MessageBox.Show($"Failed:\n{prepResult.StatusMessage}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
-                    IsSummationComputing = false; return;
+                    return;
                 }
 
                 StatusText = prepResult.StatusMessage;
@@ -144,6 +154,7 @@ namespace EQD2Viewer.App.UI.ViewModels
 
                     CalculateSummationDVH();
                     RequestRender();
+                    succeeded = true;
                 }
                 else
                 {
@@ -154,7 +165,20 @@ namespace EQD2Viewer.App.UI.ViewModels
             }
             catch (OperationCanceledException) { SummationInfo = "Cancelled."; }
             catch (Exception ex) { SimpleLogger.Error("Summation failed", ex); MessageBox.Show($"Error:\n{ex.Message}"); }
-            finally { IsSummationComputing = false; }
+            finally
+            {
+                IsSummationComputing = false;
+                if (!succeeded)
+                {
+                    _summationService?.Dispose();
+                    _summationService = null;
+                    _activeSummationConfig = null;
+                    IsSummationActive = false;
+                    ClearSummationDVH();
+                    ComputeSinglePlanHotspot();
+                    RequestRender();
+                }
+            }
         }
 
         /// <summary>
@@ -248,11 +272,32 @@ namespace EQD2Viewer.App.UI.ViewModels
         /// <summary>
         /// Recomputes the summation ("Σ") rows and curves when the selected structures or
         /// their α/β change while a summation is active. No-op otherwise.
+        ///
+        /// Debounced: the α/β cell updates its binding on every keystroke, and each Σ refresh
+        /// is a full pass over every selected structure's voxels for every plan. Typing "2.5"
+        /// must cost one recompute, not four.
         /// </summary>
+        private DispatcherTimer? _summationDvhDebounce;
+
         private void RefreshSummationDVHIfActive()
         {
-            if (_isSummationActive && _summationService != null && _summationService.HasSummedDose)
-                CalculateSummationDVH();
+            if (!_isSummationActive || _summationService == null || !_summationService.HasSummedDose) return;
+
+            if (_summationDvhDebounce == null)
+            {
+                _summationDvhDebounce = new DispatcherTimer
+                {
+                    Interval = TimeSpan.FromMilliseconds(RenderConstants.AlphaBetaDebounceMs)
+                };
+                _summationDvhDebounce.Tick += (s, e) =>
+                {
+                    _summationDvhDebounce.Stop();
+                    if (_isSummationActive && _summationService != null && _summationService.HasSummedDose)
+                        CalculateSummationDVH();
+                };
+            }
+            _summationDvhDebounce.Stop();
+            _summationDvhDebounce.Start();
         }
 
         private void CalculateSummationDVH()
@@ -278,16 +323,29 @@ namespace EQD2Viewer.App.UI.ViewModels
                 // One calculation path for both EQD2 and Physical mode. The table row is
                 // built from exact voxel statistics — never read back from the curve.
                 var result = _summationService.ComputeStructureDVH(structureId, structureAlphaBeta);
-                if (result.IsEmpty) continue;
-
                 var cached = _dvhCache.FirstOrDefault(c => c.Structure.Id == structureId);
 
-                // Volume: Eclipse's own figure for the structure when the snapshot has it, so the
-                // Σ row agrees with the plan rows; otherwise voxel count × voxel volume.
-                double eclipseVolumeCc = cached?.DvhCurve?.VolumeCc ?? 0;
-                double volumeCc = eclipseVolumeCc > 0
-                    ? eclipseVolumeCc
-                    : result.Statistics.VoxelCount * voxelVolCc;
+                if (result.IsEmpty)
+                {
+                    // The contour rasterised to no CT voxel (thinner than a pixel, or between row
+                    // centres). Say so in the table instead of silently leaving the structure out.
+                    SimpleLogger.Warning($"Summation DVH: structure '{structureId}' covers no voxel on the CT grid.");
+                    SummaryData.Add(new DVHSummary
+                    {
+                        StructureId = structureId,
+                        PlanId = "Summation",
+                        Type = "no voxels on CT grid",
+                        Source = DVHSummary.SourceVoxelSum,
+                        DMax = double.NaN, DMean = double.NaN, DMin = double.NaN, Volume = 0,
+                        IsSummation = true
+                    });
+                    continue;
+                }
+
+                // Volume is the volume the statistics were computed on: CT-grid voxels inside the
+                // contour. Eclipse's own figure stays on the Eclipse rows — the difference between
+                // the two is exactly what a single-plan validation is meant to show.
+                double volumeCc = result.Statistics.VoxelCount * voxelVolCc;
 
                 SummaryData.Add(new DVHSummary
                 {
@@ -363,6 +421,9 @@ namespace EQD2Viewer.App.UI.ViewModels
                 PlotModel.Series.Remove(s);
             foreach (var s in SummaryData.Where(s => s.IsSummation).ToList())
                 SummaryData.Remove(s);
+            // OxyPlot does not redraw on collection changes — without this the removed curves
+            // stay on screen until something else invalidates the plot.
+            RefreshPlot();
         }
 
         private void RenderSummationScene()
