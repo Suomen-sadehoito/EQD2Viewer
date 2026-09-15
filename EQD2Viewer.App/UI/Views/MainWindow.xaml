@@ -133,14 +133,52 @@
 									<Style TargetType="DataGridColumnHeader" BasedOn="{StaticResource GridHeader}"/>
 								</DataGrid.ColumnHeaderStyle>
 								<DataGrid.Columns>
-									<DataGridTextColumn Header="Structure" Width="*" Binding="{Binding StructureId}"/>
-									<DataGridTextColumn Header="Plan" Width="65" Binding="{Binding PlanId}"/>
-									<DataGridTextColumn Header="Type" Width="85" Binding="{Binding Type}"/>
-										<DataGridTextColumn Header="Source" Width="80" Binding="{Binding Source}"/>
-									<DataGridTextColumn Header="Dmax (Gy)" Width="78" Binding="{Binding DMax, StringFormat=F2}"/>
-									<DataGridTextColumn Header="Dmean (Gy)" Width="82" Binding="{Binding DMean, StringFormat=F2}"/>
-									<DataGridTextColumn Header="Dmin (Gy)" Width="78" Binding="{Binding DMin, StringFormat=F2}"/>
-									<DataGridTextColumn Header="Vol (cm³)" Width="78" Binding="{Binding Volume, StringFormat=F2}"/>
+									<DataGridTextColumn Header="Structure" Width="*" MinWidth="90" Binding="{Binding StructureId}"/>
+									<DataGridTextColumn Header="Plan" Width="Auto" MinWidth="65" Binding="{Binding PlanId}">
+										<DataGridTextColumn.ElementStyle>
+											<Style TargetType="TextBlock"><Setter Property="ToolTip" Value="{Binding PlanId}"/></Style>
+										</DataGridTextColumn.ElementStyle>
+									</DataGridTextColumn>
+									<DataGridTextColumn Header="Type" Width="Auto" MinWidth="85" Binding="{Binding Type}">
+										<DataGridTextColumn.ElementStyle>
+											<Style TargetType="TextBlock"><Setter Property="ToolTip" Value="{Binding Type}"/></Style>
+										</DataGridTextColumn.ElementStyle>
+									</DataGridTextColumn>
+									<DataGridTextColumn Header="Source" Width="Auto" MinWidth="80" Binding="{Binding Source}">
+										<DataGridTextColumn.HeaderStyle>
+											<Style TargetType="DataGridColumnHeader" BasedOn="{StaticResource GridHeader}">
+												<Setter Property="ToolTip" Value="Eclipse DVH: numbers from the DVH Eclipse computed for the open plan. Voxel sum: computed by the viewer from dose resampled onto the open CT grid (summation rows). The two are expected to differ slightly — CT-grid rasterisation, interpolated dose."/>
+											</Style>
+										</DataGridTextColumn.HeaderStyle>
+									</DataGridTextColumn>
+									<DataGridTextColumn Header="Dmax (Gy)" Width="78" Binding="{Binding DMax, StringFormat=F2}">
+										<DataGridTextColumn.HeaderStyle>
+											<Style TargetType="DataGridColumnHeader" BasedOn="{StaticResource GridHeader}">
+												<Setter Property="ToolTip" Value="Voxel-sum rows: dose is interpolated at CT voxel centres, so Dmax is at or slightly below the dose-grid peak Eclipse reports."/>
+											</Style>
+										</DataGridTextColumn.HeaderStyle>
+									</DataGridTextColumn>
+									<DataGridTextColumn Header="Dmean (Gy)" Width="82" Binding="{Binding DMean, StringFormat=F2}">
+										<DataGridTextColumn.HeaderStyle>
+											<Style TargetType="DataGridColumnHeader" BasedOn="{StaticResource GridHeader}">
+												<Setter Property="ToolTip" Value="Voxel-sum rows: mean over every voxel of the contour. A part of the structure outside a plan's dose grid counts as 0 Gy, which lowers the mean below a mean over the covered part only."/>
+											</Style>
+										</DataGridTextColumn.HeaderStyle>
+									</DataGridTextColumn>
+									<DataGridTextColumn Header="Dmin (Gy)" Width="78" Binding="{Binding DMin, StringFormat=F2}">
+										<DataGridTextColumn.HeaderStyle>
+											<Style TargetType="DataGridColumnHeader" BasedOn="{StaticResource GridHeader}">
+												<Setter Property="ToolTip" Value="Voxel-sum rows: Dmin = 0 means part of the contour lies outside a plan's dose grid (those voxels count as 0 Gy)."/>
+											</Style>
+										</DataGridTextColumn.HeaderStyle>
+									</DataGridTextColumn>
+									<DataGridTextColumn Header="Vol (cm³)" Width="78" Binding="{Binding Volume, StringFormat=F2}">
+										<DataGridTextColumn.HeaderStyle>
+											<Style TargetType="DataGridColumnHeader" BasedOn="{StaticResource GridHeader}">
+												<Setter Property="ToolTip" Value="Eclipse rows: Eclipse's contour volume. Voxel-sum rows: volume of the CT-grid voxels inside the contour — the volume the row's statistics were computed on. A gap between the two shows how much of a small or thin structure the CT grid captures."/>
+											</Style>
+										</DataGridTextColumn.HeaderStyle>
+									</DataGridTextColumn>
 								</DataGrid.Columns>
 							</DataGrid>
 						</TabItem>
@@ -460,7 +498,7 @@
 							</DataGrid>
 
 							<Button Content="Calculate EQD2 DVH" Style="{StaticResource BtnPrimary}" Command="{Binding CalculateEQD2Command}" HorizontalAlignment="Stretch" Margin="0,8,0,6"
-                                    ToolTip="Calculates EQD2 DVH curves using per-structure α/β values above. In summation mode, correctly applies each plan's own fractionation schedule."/>
+                                    ToolTip="Calculates the EQD2 DVH of the open plan from its Eclipse curve, using the per-structure α/β above and the fraction slider. Σ rows are independent of this: they use each plan's fraction count from the summation dialog and update on their own when a structure's α/β changes."/>
 
 							<StackPanel Orientation="Horizontal">
 								<CheckBox Content=" Physical" Style="{StaticResource Check}" Margin="0,0,16,0" IsChecked="{Binding ShowPhysicalDVH}"/>

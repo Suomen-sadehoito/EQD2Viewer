@@ -191,7 +191,9 @@ namespace EQD2Viewer.App.UI.Views
                 MessageBox.Show(
                     "Select at least one plan.\n\n" +
                     "Tick the 'Include' checkbox on the rows you want to combine. A single plan " +
-                    "gives a voxel-based DVH to compare against the Eclipse DVH of that plan.",
+                    "gives a voxel-based DVH to compare against the Eclipse DVH of that plan. " +
+                    "The two differ slightly by design (CT-grid rasterisation, interpolated dose); " +
+                    "a large difference indicates a geometry problem.",
                     "Summation setup", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }

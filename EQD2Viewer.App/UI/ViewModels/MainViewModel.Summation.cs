@@ -200,8 +200,18 @@ namespace EQD2Viewer.App.UI.ViewModels
                 return;
             }
             string method = _activeSummationConfig.Method == SummationMethod.EQD2 ? "EQD2" : "Physical";
-            SummationInfo = $"{method} sum: {_activeSummationConfig.Plans.Count} plans | " +
-                            $"Max: {maxGy:F2} Gy | Ref: {refGy:F2} Gy";
+            int planCount = _activeSummationConfig.Plans.Count;
+            string plans = planCount == 1 ? "1 plan" : $"{planCount} plans";
+            SummationInfo = $"{method} sum: {plans} | Max: {maxGy:F2} Gy | Ref: {refGy:F2} Gy";
+
+            // The open plan's Eclipse EQD2 row uses the fraction slider; its Σ row uses the
+            // fraction count entered in the summation dialog. If they differ, the two rows
+            // are not comparable and the user should know why.
+            var openPlanEntry = _activeSummationConfig.Plans.FirstOrDefault(p =>
+                p.PlanId == _snapshot?.ActivePlan?.Id && p.CourseId == _snapshot?.ActivePlan?.CourseId);
+            if (openPlanEntry != null && openPlanEntry.NumberOfFractions != _doseOverlay.NumberOfFractions)
+                SummationInfo += $" | Note: Σ uses {openPlanEntry.NumberOfFractions} fx for the open plan, " +
+                                 $"the EQD2 row uses the slider ({_doseOverlay.NumberOfFractions} fx)";
 
             double displayAb = _doseOverlay.DisplayAlphaBeta;
             double summationAb = _activeSummationConfig.GlobalAlphaBeta;
@@ -318,7 +328,10 @@ namespace EQD2Viewer.App.UI.ViewModels
 
                 var structureSetting = StructureSettings.FirstOrDefault(s => s.Id == structureId);
                 double structureAlphaBeta = structureSetting?.AlphaBeta ?? 3.0;
-                string methodLabel = isEqd2Sum ? $"EQD2 α/β={structureAlphaBeta:F1}" : "Physical Sum";
+                // Σ total and per-plan rows share the Plan column prefix "Σ"; the Type column
+                // tells them apart ("Σ EQD2 …" for the total, "EQD2 …" for one plan's part).
+                string methodLabel = isEqd2Sum ? $"EQD2 α/β={structureAlphaBeta:F1}" : "Physical";
+                string totalLabel = isEqd2Sum ? $"Σ EQD2 α/β={structureAlphaBeta:F1}" : "Σ Physical";
 
                 // One calculation path for both EQD2 and Physical mode. The table row is
                 // built from exact voxel statistics — never read back from the curve.
@@ -351,7 +364,7 @@ namespace EQD2Viewer.App.UI.ViewModels
                 {
                     StructureId = structureId,
                     PlanId = "Summation",
-                    Type = methodLabel,
+                    Type = totalLabel,
                     Source = DVHSummary.SourceVoxelSum,
                     DMax = result.Statistics.DMaxGy,
                     DMean = result.Statistics.DMeanGy,
@@ -366,7 +379,7 @@ namespace EQD2Viewer.App.UI.ViewModels
 
                 var series = new LineSeries
                 {
-                    Title = $"{structureId} {methodLabel}",
+                    Title = $"{structureId} {totalLabel}",
                     Tag = $"Summation_{structureId}",
                     Color = color,
                     StrokeThickness = 2.5,
@@ -377,19 +390,21 @@ namespace EQD2Viewer.App.UI.ViewModels
 
                 // Each plan's own contribution to the sum, from the same conversion and the same
                 // voxels — so the user can see what the Σ curve is made of. Thin dotted lines,
-                // toggled by ShowPerPlanSummationDVH; rows are labelled "Σ <plan>".
-                if (_activeSummationConfig != null)
+                // toggled by ShowPerPlanSummationDVH; rows are labelled "Σ <plan>". With a
+                // single plan the part equals the total, so nothing is duplicated.
+                if (_activeSummationConfig != null && _activeSummationConfig.Plans.Count > 1)
                 {
                     foreach (var plan in _activeSummationConfig.Plans)
                     {
                         var planResult = _summationService.ComputeStructurePlanDVH(plan.DisplayLabel, structureId, structureAlphaBeta);
                         if (planResult.IsEmpty) continue;
 
+                        string fxLabel = isEqd2Sum ? $"{methodLabel} · {plan.NumberOfFractions} fx" : methodLabel;
                         SummaryData.Add(new DVHSummary
                         {
                             StructureId = structureId,
                             PlanId = $"Σ {plan.DisplayLabel}",
-                            Type = methodLabel,
+                            Type = fxLabel,
                             Source = DVHSummary.SourceVoxelSum,
                             DMax = planResult.Statistics.DMaxGy,
                             DMean = planResult.Statistics.DMeanGy,
@@ -400,7 +415,7 @@ namespace EQD2Viewer.App.UI.ViewModels
 
                         var planSeries = new LineSeries
                         {
-                            Title = $"{structureId} Σ {plan.DisplayLabel} ({methodLabel})",
+                            Title = $"{structureId} Σ {plan.DisplayLabel} ({fxLabel})",
                             Tag = $"SummationPlan_{plan.DisplayLabel}_{structureId}",
                             Color = color,
                             StrokeThickness = 1.2,
