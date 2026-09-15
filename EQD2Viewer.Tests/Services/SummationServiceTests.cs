@@ -148,12 +148,14 @@ namespace EQD2Viewer.Tests.Services
         }
 
         [Fact]
-        public void SliceCount_MatchesReferenceZSize()
+        public async Task GetSummedSlice_CoversExactlyTheReferenceZRange()
         {
-            var loader = MakeLoader(refDoseGy: 0, movingDoseGy: 0);
+            var loader = MakeLoader(refDoseGy: 1, movingDoseGy: 0);
             var svc = new SummationService(MakeReferenceCt(), loader.Object, new List<RegistrationData>());
-            svc.PrepareData(MakeConfig());
-            svc.SliceCount.Should().Be(RefZ);
+            svc.PrepareData(MakeConfig()).Success.Should().BeTrue();
+            await svc.ComputeAsync(null, CancellationToken.None);
+            svc.GetSummedSlice(RefZ - 1).Should().NotBeNull();
+            svc.GetSummedSlice(RefZ).Should().BeNull();
         }
 
         [Fact]
@@ -851,7 +853,7 @@ namespace EQD2Viewer.Tests.Services
             result.Statistics.DMinGy.Should().BeApproximately(10, 1e-9);
         }
 
-        // ── Round-trip: GetSummedSlice / GetStructureMask ──────────────────
+        // ── GetSummedSlice bounds ──────────────────────────────────────────
 
         [Fact]
         public async Task GetSummedSlice_OutOfRangeIndex_ReturnsNull()

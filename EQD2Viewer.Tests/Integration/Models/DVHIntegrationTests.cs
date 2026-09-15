@@ -1,6 +1,5 @@
-﻿using EQD2Viewer.Core.Models;
+using EQD2Viewer.Core.Models;
 using EQD2Viewer.Core.Calculations;
-using EQD2Viewer.Services;
 using EQD2Viewer.Fixtures;
 using FluentAssertions;
 using System.Linq;
@@ -8,84 +7,85 @@ using System.Linq;
 namespace EQD2Viewer.Tests.Integration
 {
     /// <summary>
-    /// Integration tests for DVH calculation from fixture data.
-    /// 
-    /// Compares our DVH computation against Eclipse's exported DVH curves.
-    /// This catches errors in the histogram binning, cumulative conversion,
-    /// and structure mask combination logic.
-    /// 
-    /// Tolerances:
-    ///   - Dmax: ±0.5 Gy (histogram bin width effect)
-    ///   - Dmean: ±1.0 Gy (integration method differences)
-    ///   - Volume at dose: ±3% (rasterization + binning differences)
+    /// Integration tests for the voxel DVH engine (the path behind every Σ row) on
+    /// Eclipse-exported fixture dose slices.
+    ///
+    /// The fixture generator writes, for each exported dose slice, the max and the mean
+    /// over every voxel of that slice (zeros included). Those are the exact figures
+    /// <see cref="DVHCalculator.ComputeStatistics"/> must reproduce over a whole-slice
+    /// mask, so this is a direct check of the production statistics against values
+    /// computed independently at export time.
+    ///
+    /// Eclipse's own DVH curves are also exercised: the EQD2 conversion applied to
+    /// them must stay finite, ordered and bounded.
     /// </summary>
     public class DVHIntegrationTests
     {
-        private readonly DVHService _dvhService = new DVHService();
-
         [Theory]
         [MemberData(nameof(FixtureLoader.AllFixtureDirectories), MemberType = typeof(FixtureLoader))]
-        public void DVHFromSummedDose_UniformMask_ShouldStartAt100Percent(string fixtureName)
+        public void SliceStatistics_ShouldMatchFixtureMaxAndMean(string fixtureName)
         {
             var slices = FixtureLoader.LoadDoseSlices(fixtureName);
-            if (slices.Length == 0) return;
+            slices.Should().NotBeEmpty("fixture must contain dose slices");
 
-            var slice = slices[0];
-            var doseData = new double[][] { slice.valuesGy };
-            var mask = new bool[][] { Enumerable.Repeat(true, slice.valuesGy.Length).ToArray() };
+            foreach (var slice in slices)
+            {
+                var mask = new bool[][] { Enumerable.Repeat(true, slice.valuesGy.Length).ToArray() };
 
-            var dvh = _dvhService.CalculateDVHFromSummedDose(
-                doseData, mask, 0.001, slice.maxDoseGy);
+                var stats = DVHCalculator.ComputeStatistics(new[] { slice.valuesGy }, mask);
 
-            dvh.Should().NotBeEmpty();
-            dvh[0].VolumePercent.Should().BeApproximately(100.0, 0.1,
-                "DVH must start at 100% volume");
+                stats.VoxelCount.Should().Be(slice.valuesGy.Length);
+                // The generator rounds to 4 decimals.
+                stats.DMaxGy.Should().BeApproximately(slice.maxDoseGy, 5e-5,
+                    $"slice {slice.sliceIndex}: Dmax must equal the exported maximum");
+                stats.DMeanGy.Should().BeApproximately(slice.meanDoseGy, 5e-5,
+                    $"slice {slice.sliceIndex}: Dmean must equal the exported mean over all voxels");
+            }
         }
 
         [Theory]
         [MemberData(nameof(FixtureLoader.AllFixtureDirectories), MemberType = typeof(FixtureLoader))]
-        public void DVHFromSummedDose_ShouldBeMonotonicallyDecreasing(string fixtureName)
+        public void SliceCurve_StartsAtHundredEndsAtZero_AndIsMonotonic(string fixtureName)
         {
             var slices = FixtureLoader.LoadDoseSlices(fixtureName);
-            if (slices.Length == 0) return;
+            slices.Should().NotBeEmpty();
 
-            var slice = slices[0];
-            var doseData = new double[][] { slice.valuesGy };
-            var mask = new bool[][] { Enumerable.Repeat(true, slice.valuesGy.Length).ToArray() };
+            foreach (var slice in slices)
+            {
+                var mask = new bool[][] { Enumerable.Repeat(true, slice.valuesGy.Length).ToArray() };
 
-            var dvh = _dvhService.CalculateDVHFromSummedDose(
-                doseData, mask, 0.001, slice.maxDoseGy);
+                var dvh = DVHCalculator.ComputeCumulative(new[] { slice.valuesGy }, mask,
+                    DomainConstants.DvhSamplingResolution, out var stats);
 
-            for (int i = 1; i < dvh.Length; i++)
-                dvh[i].VolumePercent.Should().BeLessOrEqualTo(dvh[i - 1].VolumePercent + 0.01,
-                    $"cumulative DVH must be non-increasing at bin {i}");
+                dvh.Should().NotBeEmpty();
+                dvh[0].VolumePercent.Should().Be(100.0, "every voxel receives ≥ 0 Gy");
+                dvh.Last().VolumePercent.Should().Be(0.0, "no voxel receives more than the maximum");
+                dvh.Last().DoseGy.Should().BeGreaterThan(stats.DMaxGy, "the curve is sized past the structure's own maximum");
+                for (int i = 1; i < dvh.Length; i++)
+                    dvh[i].VolumePercent.Should().BeLessOrEqualTo(dvh[i - 1].VolumePercent,
+                        $"slice {slice.sliceIndex}: cumulative DVH must be non-increasing at bin {i}");
+            }
         }
 
         [Theory]
         [MemberData(nameof(FixtureLoader.AllFixtureDirectories), MemberType = typeof(FixtureLoader))]
-        public void BuildSummaryFromCurve_AgainstEclipseDVH_DmaxShouldMatch(string fixtureName)
+        public void EclipseCurve_LastNonZeroPoint_IsNearReportedDmax(string fixtureName)
         {
+            // Sanity check on the fixture itself: Eclipse's reported Dmax must sit where
+            // its own cumulative curve reaches zero volume (within the 0.01 Gy sampling
+            // Eclipse was asked for, plus its own rounding).
             var dvhFixtures = FixtureLoader.LoadDvhCurves(fixtureName);
 
             foreach (var dvhFix in dvhFixtures)
             {
                 if (dvhFix.curve == null || dvhFix.curve.Length == 0) continue;
 
-                // Convert fixture curve to DoseVolumePoint array
-                var curve = dvhFix.curve
-                    .Select(p => new DoseVolumePoint(p[0], p[1]))
-                    .ToArray();
+                double lastNonZeroDose = 0;
+                for (int i = dvhFix.curve.Length - 1; i >= 0; i--)
+                    if (dvhFix.curve[i][1] > 0) { lastNonZeroDose = dvhFix.curve[i][0]; break; }
 
-                var summary = _dvhService.BuildSummaryFromCurve(
-                    dvhFix.structureId, dvhFix.planId, "Physical",
-                    curve, dvhFix.volumeCc);
-
-                // Dmax should be close to Eclipse's value
-                // Tolerance is wider because our Dmax is the last bin with volume > 0.01%,
-                // while Eclipse may interpolate differently
-                summary.DMax.Should().BeApproximately(dvhFix.dmaxGy, 0.5,
-                    $"Dmax mismatch for {dvhFix.structureId}: " +
-                    $"Eclipse={dvhFix.dmaxGy:F2}, Ours={summary.DMax:F2}");
+                lastNonZeroDose.Should().BeApproximately(dvhFix.dmaxGy, 0.5,
+                    $"{dvhFix.structureId}: Eclipse Dmax {dvhFix.dmaxGy:F2} vs curve end {lastNonZeroDose:F2}");
             }
         }
 
@@ -101,7 +101,6 @@ namespace EQD2Viewer.Tests.Integration
             {
                 if (dvhFix.curve == null || dvhFix.curve.Length < 2) continue;
 
-                // Build a DoseVolumePoint array
                 var curveAsPoints = dvhFix.curve
                     .Select(p => new DoseVolumePoint(p[0], p[1]))
                     .ToArray();
@@ -115,19 +114,15 @@ namespace EQD2Viewer.Tests.Integration
                     for (int i = 0; i < eqd2Curve.Length; i++)
                     {
                         double d = eqd2Curve[i].DoseGy;
-                        double v = eqd2Curve[i].VolumePercent;
                         double.IsNaN(d).Should().BeFalse($"NaN dose at [{i}] for {dvhFix.structureId}");
                         double.IsInfinity(d).Should().BeFalse($"Inf dose at [{i}]");
                         d.Should().BeGreaterOrEqualTo(0, $"negative EQD2 dose at [{i}]");
                     }
 
-                    // Dose values should be monotonically non-decreasing
                     for (int i = 1; i < eqd2Curve.Length; i++)
-                    {
                         eqd2Curve[i].DoseGy.Should()
                             .BeGreaterOrEqualTo(eqd2Curve[i - 1].DoseGy - 1e-6,
                             $"EQD2 curve not monotonic at [{i}]");
-                    }
                 }
             }
         }
@@ -150,7 +145,6 @@ namespace EQD2Viewer.Tests.Integration
 
                 double meanEqd2 = EQD2Calculator.CalculateMeanEQD2FromDVH(curveAsPoints, fx, 3.0);
 
-                // Mean should be between min and max dose (sanity check)
                 meanEqd2.Should().BeGreaterOrEqualTo(0,
                     $"negative mean EQD2 for {dvhFix.structureId}");
 

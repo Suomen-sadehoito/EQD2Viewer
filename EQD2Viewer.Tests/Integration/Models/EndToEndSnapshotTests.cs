@@ -1,6 +1,7 @@
 using EQD2Viewer.App.UI.Rendering;
 using EQD2Viewer.Services;
 using EQD2Viewer.Core.Serialization;
+using EQD2Viewer.Core.Interfaces;
 using EQD2Viewer.Core.Models;
 using EQD2Viewer.Core.Data;
 using FluentAssertions;
@@ -289,39 +290,89 @@ namespace EQD2Viewer.Tests.Integration.Models
         }
 
         /// <summary>
-        /// Loads a real snapshot and verifies DVH statistics against Eclipse values.
-        /// Compares DMax, DMean for each structure that has pre-computed DVH curves.
+        /// Loads a real snapshot and runs the plan through the voxel summation engine as a
+        /// single-plan sum — the path that produces every Σ row — then compares each
+        /// structure's statistics with the DVH Eclipse computed for the same plan.
+        ///
+        /// Expected differences by design: the viewer rasterises the contour on the CT grid
+        /// (no partial voxels) and interpolates the dose grid at CT voxel centres, so its
+        /// Dmax is at or a little below Eclipse's; any part of the contour outside the dose
+        /// grid counts as 0 Gy, so Dmean is compared only for fully covered structures.
         /// </summary>
         [Fact]
-        public void EclipseSnapshot_DVHStatistics_ShouldMatchEclipseValues()
+        public async System.Threading.Tasks.Task EclipseSnapshot_VoxelSummationStatistics_ShouldMatchEclipseDVH()
         {
             string? snapshotDir = FindEclipseSnapshotDir();
             if (snapshotDir == null) return;
 
             var snap = SnapshotSerializer.ReadAuto(snapshotDir);
             if (snap?.DvhCurves == null || snap.DvhCurves.Count == 0) return;
+            if (snap.CtImage == null || snap.Dose == null || snap.ActivePlan == null) return;
 
-            var dvhService = new DVHService();
+            var loader = new SnapshotSummationDataLoader(snap);
+            using var svc = new SummationService(snap.CtImage, loader, snap.Registrations ?? new List<RegistrationData>());
+            var config = new SummationConfig
+            {
+                Method = SummationMethod.Physical,
+                GlobalAlphaBeta = 3.0,
+                Plans = new List<SummationPlanEntry>
+                {
+                    new SummationPlanEntry
+                    {
+                        CourseId = snap.ActivePlan.CourseId, PlanId = snap.ActivePlan.Id,
+                        DisplayLabel = snap.ActivePlan.Id, IsReference = true, Weight = 1.0,
+                        NumberOfFractions = snap.ActivePlan.NumberOfFractions,
+                        TotalDoseGy = snap.ActivePlan.TotalDoseGy,
+                        PlanNormalization = snap.ActivePlan.PlanNormalization
+                    }
+                }
+            };
+            svc.PrepareData(config).Success.Should().BeTrue();
+            (await svc.ComputeAsync(null, System.Threading.CancellationToken.None)).Success.Should().BeTrue();
 
+            double voxelCc = svc.GetVoxelVolumeCc();
+            int compared = 0;
             foreach (var dvh in snap.DvhCurves)
             {
-                if (dvh.Curve == null || dvh.Curve.Length < 3) continue;
+                var result = svc.ComputeStructureDVH(dvh.StructureId, structureAlphaBeta: 3.0);
+                if (result.IsEmpty) continue;
+                compared++;
+                var s = result.Statistics;
 
-                // Build summary from the serialized curve
-                var curve = dvh.Curve.Select(p => new DoseVolumePoint(p[0], p[1])).ToArray();
-                var summary = dvhService.BuildSummaryFromCurve(
-                    dvh.StructureId, dvh.PlanId, "Physical", curve, dvh.VolumeCc);
+                double dmaxTolerance = Math.Max(0.5, dvh.DMaxGy * 0.03);
+                s.DMaxGy.Should().BeApproximately(dvh.DMaxGy, dmaxTolerance,
+                    $"{dvh.StructureId}: voxel Dmax {s.DMaxGy:F2} vs Eclipse {dvh.DMaxGy:F2}");
+                s.DMaxGy.Should().BeLessOrEqualTo(dvh.DMaxGy + 0.05,
+                    $"{dvh.StructureId}: interpolation at CT voxel centres cannot exceed the dose-grid peak");
 
-                // DMax from our summary should be close to Eclipse's DMax
-                double dmaxTolerance = Math.Max(0.1, dvh.DMaxGy * 0.02); // 2% or 0.1 Gy
-                summary.DMax.Should().BeApproximately(dvh.DMaxGy, dmaxTolerance,
-                    $"{dvh.StructureId}: DMax mismatch");
+                if (s.DMinGy > 0 && dvh.DMeanGy > 0)
+                    s.DMeanGy.Should().BeApproximately(dvh.DMeanGy, Math.Max(1.0, dvh.DMeanGy * 0.05),
+                        $"{dvh.StructureId}: Dmean (fully covered structure)");
 
-                // Volume should match
-                if (dvh.VolumeCc > 0)
-                    summary.Volume.Should().BeApproximately(dvh.VolumeCc, dvh.VolumeCc * 0.01,
-                        $"{dvh.StructureId}: volume mismatch");
+                if (dvh.VolumeCc > 1.0)
+                    (s.VoxelCount * voxelCc).Should().BeApproximately(dvh.VolumeCc, dvh.VolumeCc * 0.15,
+                        $"{dvh.StructureId}: CT-grid voxel volume vs Eclipse contour volume");
             }
+            compared.Should().BeGreaterThan(0, "the snapshot's structures must rasterise onto its CT");
+        }
+
+        /// <summary>Serves a loaded <see cref="ClinicalSnapshot"/> to <see cref="SummationService"/> as its single plan.</summary>
+        private sealed class SnapshotSummationDataLoader : ISummationDataLoader
+        {
+            private readonly ClinicalSnapshot _snap;
+            public SnapshotSummationDataLoader(ClinicalSnapshot snap) => _snap = snap;
+
+            public SummationPlanDoseData LoadPlanDose(string courseId, string planId, double totalDoseGy)
+                => new SummationPlanDoseData
+                {
+                    DoseVoxels = _snap.Dose.Voxels,
+                    DoseGeometry = _snap.Dose.Geometry,
+                    Scaling = _snap.Dose.Scaling
+                };
+
+            public List<StructureData> LoadStructureContours(string courseId, string planId) => _snap.Structures;
+            public RegistrationData FindRegistration(string registrationId) => null!;
+            public string GetPlanImageFOR(string courseId, string planId) => _snap.CtImage.FOR;
         }
 
         // ========================================================

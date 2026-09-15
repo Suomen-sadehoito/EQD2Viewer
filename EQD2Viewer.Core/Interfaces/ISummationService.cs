@@ -60,26 +60,19 @@ namespace EQD2Viewer.Core.Interfaces
         StructureDvhResult ComputeStructurePlanDVH(string planDisplayLabel, string structureId, double structureAlphaBeta);
 
         bool HasSummedDose { get; }
+
+        /// <summary>The EQD2 (or physical) display sum on one reference CT slice, or null before compute.</summary>
         double[]? GetSummedSlice(int sliceIndex);
         double SummedReferenceDoseGy { get; }
 
         /// <summary>Returns the secondary plan's CT voxels mapped onto the reference CT grid.</summary>
         int[]? GetRegisteredCtSlice(string planDisplayLabel, int sliceIndex);
 
-        /// <summary>Gets the pre-rasterized structure mask for a specific structure and slice.</summary>
-        bool[]? GetStructureMask(string structureId, int sliceIndex);
-
         /// <summary>Gets all structure IDs that have cached masks.</summary>
         IReadOnlyList<string> GetCachedStructureIds();
 
         /// <summary>Gets the voxel volume in cm^3 for the reference CT grid.</summary>
         double GetVoxelVolumeCc();
-
-        /// <summary>Gets the total number of slices.</summary>
-        int SliceCount { get; }
-
-        /// <summary>Gets the maximum dose in the current EQD2 display sum [Gy].</summary>
-        double MaxDoseGy { get; }
     }
 
     public class SummationResult
@@ -88,7 +81,6 @@ namespace EQD2Viewer.Core.Interfaces
         public string StatusMessage { get; set; } = "";
         public double MaxDoseGy { get; set; }
         public double TotalReferenceDoseGy { get; set; }
-        public int SliceCount { get; set; }
 
         /// <summary>Voxel index (on the reference CT grid) where MaxDoseGy was found.
         /// Used by the UI to jump to the hotspot slice.</summary>

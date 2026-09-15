@@ -8,8 +8,9 @@
         public const double NormalizationFractionThreshold = 5.0;
         public const double MinReferenceDoseGy = 0.1;
         public const int DoseCalibrationRawValue = 10000;
+        /// <summary>DVH bin width [Gy]: requested from Eclipse for single-plan curves and used
+        /// for the viewer's own summation curves, so both have the same resolution.</summary>
         public const double DvhSamplingResolution = 0.01;
-        public const int DvhHistogramBins = 1000;
 
         /// <summary>Upper bound on fixed-width DVH bins (2000 Gy at 0.01 Gy resolution).
         /// Only a corrupt dose value could reach it; it exists to bound the allocation.</summary>

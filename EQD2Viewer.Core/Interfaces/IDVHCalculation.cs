@@ -4,22 +4,15 @@ using EQD2Viewer.Core.Models;
 namespace EQD2Viewer.Core.Interfaces
 {
     /// <summary>
-    /// DVH calculation service interface.
+    /// Builds Dose Statistics rows for a single plan from the DVH curve Eclipse computed
+    /// for it (physical, and EQD2-converted at a given fractionation and α/β).
     ///
-    /// Provides methods for:
-    ///   - Computing DVH from summed dose arrays (summation workflow)
-    ///   - Building summary statistics from pre-computed DVH curves
-    ///   - Building physical and EQD2 summaries from Eclipse DVH data
+    /// Summation ("Σ") rows do not come through here: they are computed from summed dose
+    /// voxels by <see cref="ISummationService.ComputeStructureDVH"/> and
+    /// <see cref="ISummationService.ComputeStructurePlanDVH"/>.
     /// </summary>
     public interface IDVHCalculation
     {
-        DoseVolumePoint[] CalculateDVHFromSummedDose(
-            double[][] summedSlices, bool[][] structureMasks,
-            double voxelVolumeCc, double maxDoseGy);
-
-        DVHSummary BuildSummaryFromCurve(string structureId, string label,
-            string type, DoseVolumePoint[] curve, double totalVolumeCc);
-
         /// <summary>
         /// Builds a physical dose summary from a pre-computed DVH curve.
         /// </summary>

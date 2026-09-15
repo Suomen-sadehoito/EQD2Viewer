@@ -4,60 +4,34 @@ using System;
 namespace EQD2Viewer.Core.Calculations
 {
     /// <summary>
-    /// Pure-function DVH utilities shared by every consumer.
+    /// Pure-function DVH utilities behind every summation ("Σ") row and curve.
     ///
     /// Cumulative-DVH semantics: a point (D, V) means "V percent of the structure's
     /// voxels receive at least D Gy". Every masked voxel — including voxels with zero
     /// or negative dose, such as the part of a structure that lies outside a plan's
     /// dose grid — is placed in exactly one histogram bin (bin 0 for dose ≤ 0), so
-    /// the curve starts at 100% and always decays to 0% above the true maximum.
+    /// the curve starts at 100% and decays to 0% above the true maximum.
     ///
-    /// Two binning conventions:
-    ///   * <see cref="BinToHistogram"/>: relative bins. numBins =
-    ///     <see cref="DomainConstants.DvhHistogramBins"/>, binWidth = maxDoseGy * 1.1 / numBins,
-    ///     bin index = floor(dose / binWidth) clamped to numBins - 1.
-    ///   * <see cref="ComputeCumulative"/>: fixed-width bins (typically
-    ///     <see cref="DomainConstants.DvhSamplingResolution"/>, the same resolution the
-    ///     viewer requests from Eclipse for single-plan curves) sized to the structure's
-    ///     own maximum, plus exact voxel statistics from the same pass over the data.
+    /// Bins are fixed-width (typically <see cref="DomainConstants.DvhSamplingResolution"/>,
+    /// the resolution the viewer requests from Eclipse for single-plan curves) and sized
+    /// to the structure's own maximum, so no voxel is clamped into a last bin. Statistics
+    /// (max, mean, min, voxel count) are read straight from the voxel values in the same
+    /// pass — never back from the curve.
     /// </summary>
     public static class DVHCalculator
     {
         /// <summary>
-        /// Cumulative-DVH histogram for a structure. Walks every (slice, voxel)
-        /// pair where <paramref name="structureMasks"/>[z][i] is true, accumulates
-        /// the corresponding dose from <paramref name="doseSlices"/>[z][i] into
-        /// the histogram, and returns one <see cref="DoseVolumePoint"/> per bin.
-        ///
-        /// Returns an empty array when:
-        ///   * either input is null;
-        ///   * <paramref name="maxDoseGy"/> ≤ 0;
-        ///   * no voxel inside the structure mask was found.
-        /// </summary>
-        public static DoseVolumePoint[] BinToHistogram(
-            double[][] doseSlices, bool[][] structureMasks, double maxDoseGy)
-        {
-            if (doseSlices == null || structureMasks == null || maxDoseGy <= 0)
-                return Array.Empty<DoseVolumePoint>();
-
-            int numBins = DomainConstants.DvhHistogramBins;
-            double binWidth = maxDoseGy * 1.1 / numBins;
-            long[] histogram = new long[numBins];
-            long totalVoxels = Accumulate(doseSlices, structureMasks, binWidth, histogram);
-
-            if (totalVoxels == 0) return Array.Empty<DoseVolumePoint>();
-            return ToCumulative(histogram, binWidth, totalVoxels);
-        }
-
-        /// <summary>
         /// Cumulative DVH with fixed-width bins of <paramref name="binWidthGy"/>, sized to
-        /// the structure's own maximum so no voxel is ever clamped into a last bin, plus
-        /// exact <see cref="DvhStatistics"/> (max, mean, min, voxel count) read straight
-        /// from the voxel values.
+        /// the structure's own maximum, plus exact <see cref="DvhStatistics"/>.
         ///
-        /// The last point of the curve is always 0%: the bin above floor(max / width)
-        /// holds no voxel. Returns an empty array (and <see cref="DvhStatistics.Empty"/>)
-        /// when an input is null, the bin width is not positive, or the mask is empty.
+        /// The last point of the curve is 0%: the bin above floor(max / width) holds no
+        /// voxel. The one exception is a dose so large that the bin count would exceed
+        /// <see cref="DomainConstants.DvhMaxHistogramBins"/> (2000 Gy at 0.01 Gy): the
+        /// histogram is capped and the voxel clamped into the last bin, which then is not
+        /// empty. Only a corrupt dose value reaches that; the statistics are unaffected.
+        ///
+        /// Returns an empty array (and <see cref="DvhStatistics.Empty"/>) when an input is
+        /// null, the bin width is not positive, or the mask is empty.
         /// </summary>
         public static DoseVolumePoint[] ComputeCumulative(
             double[][] doseSlices, bool[][] structureMasks, double binWidthGy,

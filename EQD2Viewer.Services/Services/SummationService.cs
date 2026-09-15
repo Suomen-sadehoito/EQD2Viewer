@@ -61,8 +61,6 @@ namespace EQD2Viewer.Services
 
         public bool HasSummedDose => _hasSummedDose;
         public double SummedReferenceDoseGy => _summedReferenceDoseGy;
-        public double MaxDoseGy => _maxDoseGy;
-        public int SliceCount => _refZ;
 
         public SummationService(VolumeData referenceCtImage, ISummationDataLoader dataLoader,
             List<RegistrationData> registrations)
@@ -214,7 +212,6 @@ namespace EQD2Viewer.Services
                     Success = true,
                     MaxDoseGy = globalMax,
                     TotalReferenceDoseGy = _summedReferenceDoseGy,
-                    SliceCount = refZ,
                     MaxDoseSliceZ = maxZ,
                     MaxDosePixelX = maxX,
                     MaxDosePixelY = maxY,
@@ -304,7 +301,6 @@ namespace EQD2Viewer.Services
                Success = true,
                MaxDoseGy = globalMax,
                TotalReferenceDoseGy = _summedReferenceDoseGy,
-               SliceCount = refZ,
                MaxDoseSliceZ = maxZ,
                MaxDosePixelX = maxX,
                MaxDosePixelY = maxY,
@@ -510,14 +506,6 @@ namespace EQD2Viewer.Services
                         sliceData[ro + px] += dGy;
                 }
             }
-        }
-
-        public bool[]? GetStructureMask(string structureId, int sliceIndex)
-        {
-            if (_structureMasks == null || string.IsNullOrEmpty(structureId)) return null;
-            if (!_structureMasks.TryGetValue(structureId, out var masks)) return null;
-            if (sliceIndex < 0 || sliceIndex >= masks.Length) return null;
-            return masks[sliceIndex];
         }
 
         public IReadOnlyList<string> GetCachedStructureIds()
