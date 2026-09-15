@@ -25,7 +25,8 @@ namespace EQD2Viewer.Services
     ///
     /// Post-compute:
     ///   RecomputeEQD2DisplayAsync() -- recalculates display sum with a new alpha/beta.
-    ///   ComputeStructureEQD2DVH()   -- per-structure DVH with structure-specific alpha/beta.
+    ///   ComputeStructureDVH()       -- per-structure DVH + exact statistics with structure-specific alpha/beta.
+    ///   ComputeStructurePlanDVH()   -- the same for one plan's own contribution to the sum.
     ///
     /// Memory: Stores N * W * H * Z * 8 bytes for N plans' physical doses,
     /// plus W * H * Z * 8 bytes for the display EQD2 sum.
@@ -60,8 +61,6 @@ namespace EQD2Viewer.Services
 
         public bool HasSummedDose => _hasSummedDose;
         public double SummedReferenceDoseGy => _summedReferenceDoseGy;
-        public double MaxDoseGy => _maxDoseGy;
-        public int SliceCount => _refZ;
 
         public SummationService(VolumeData referenceCtImage, ISummationDataLoader dataLoader,
             List<RegistrationData> registrations)
@@ -213,7 +212,6 @@ namespace EQD2Viewer.Services
                     Success = true,
                     MaxDoseGy = globalMax,
                     TotalReferenceDoseGy = _summedReferenceDoseGy,
-                    SliceCount = refZ,
                     MaxDoseSliceZ = maxZ,
                     MaxDosePixelX = maxX,
                     MaxDosePixelY = maxY,
@@ -303,7 +301,6 @@ namespace EQD2Viewer.Services
                Success = true,
                MaxDoseGy = globalMax,
                TotalReferenceDoseGy = _summedReferenceDoseGy,
-               SliceCount = refZ,
                MaxDoseSliceZ = maxZ,
                MaxDosePixelX = maxX,
                MaxDosePixelY = maxY,
@@ -315,22 +312,44 @@ namespace EQD2Viewer.Services
    }, ct);
         }
 
-        public DoseVolumePoint[] ComputeStructureEQD2DVH(string structureId,
-        double structureAlphaBeta, double maxDoseGy)
-        {
-            if (_perPlanPhysicalSlices == null || _structureMasks == null || maxDoseGy <= 0)
-                return new DoseVolumePoint[0];
-            if (!_structureMasks.TryGetValue(structureId, out var masks))
-                return new DoseVolumePoint[0];
+        public StructureDvhResult ComputeStructureDVH(string structureId, double structureAlphaBeta)
+            => ComputeStructureDVHCore(structureId, structureAlphaBeta, planIndex: -1);
 
-            int planCount = _cachedPlans!.Count;
+        public StructureDvhResult ComputeStructurePlanDVH(string planDisplayLabel, string structureId, double structureAlphaBeta)
+        {
+            if (_cachedPlans == null || string.IsNullOrEmpty(planDisplayLabel))
+                return StructureDvhResult.Empty(structureId);
+            int planIndex = _cachedPlans.FindIndex(p => p.Entry.DisplayLabel == planDisplayLabel);
+            if (planIndex < 0) return StructureDvhResult.Empty(structureId);
+            return ComputeStructureDVHCore(structureId, structureAlphaBeta, planIndex);
+        }
+
+        /// <summary>
+        /// Shared implementation: <paramref name="planIndex"/> = -1 sums every plan, otherwise
+        /// only that plan contributes — so the per-plan curves and the Σ curve are guaranteed
+        /// to come from the same conversion and the same voxels.
+        /// </summary>
+        private StructureDvhResult ComputeStructureDVHCore(string structureId, double structureAlphaBeta, int planIndex)
+        {
+            if (_perPlanPhysicalSlices == null || _structureMasks == null
+                || _cachedPlans == null || _config == null || string.IsNullOrEmpty(structureId))
+                return StructureDvhResult.Empty(structureId);
+            if (!_structureMasks.TryGetValue(structureId, out var masks))
+                return StructureDvhResult.Empty(structureId);
+
+            int planCount = _cachedPlans.Count;
+            if (planIndex >= planCount) return StructureDvhResult.Empty(structureId);
+            int firstPlan = planIndex < 0 ? 0 : planIndex;
+            int lastPlan = planIndex < 0 ? planCount - 1 : planIndex;
             int sliceCount = Math.Min(_refZ, masks.Length);
 
+            // Same per-plan conversion as the display sum, but at the structure's own α/β.
+            // Physical mode routes through here too (useEqd2 = false → identity).
             var factors = new (double Q, double L, double Weight, bool UseEqd2)[planCount];
-            for (int p = 0; p < planCount; p++)
+            for (int p = firstPlan; p <= lastPlan; p++)
             {
-                var cp = _cachedPlans![p];
-                bool useEqd2 = _config!.Method == SummationMethod.EQD2
+                var cp = _cachedPlans[p];
+                bool useEqd2 = _config.Method == SummationMethod.EQD2
                 && cp.Entry.NumberOfFractions > 0 && structureAlphaBeta > 0;
                 double q = 0, l = 1.0;
                 if (useEqd2)
@@ -338,36 +357,39 @@ namespace EQD2Viewer.Services
                 factors[p] = (q, l, cp.Weight, useEqd2);
             }
 
-            // Aggregate per-plan physical doses into a per-voxel EQD2 sum, then
-            // delegate to the shared cumulative-DVH binner. The intermediate
+            // Aggregate per-plan physical doses into a per-voxel sum. A voxel the dose
+            // grids do not cover simply stays at 0 Gy — it is still part of the structure
+            // and is counted as such by the binner and the statistics. The intermediate
             // double[][] is allocated only across slices the structure intersects.
-            var eqd2Slices = new double[sliceCount][];
+            var doseSlices = new double[sliceCount][];
             for (int z = 0; z < sliceCount; z++)
             {
                 bool[] mask = masks[z];
                 if (mask == null) continue;
                 int len = mask.Length;
-                double[] eqd2Slice = new double[len];
+                double[] doseSlice = new double[len];
                 for (int i = 0; i < len; i++)
                 {
                     if (!mask[i]) continue;
-                    double eqd2Sum = 0;
-                    for (int p = 0; p < planCount; p++)
+                    double sum = 0;
+                    for (int p = firstPlan; p <= lastPlan; p++)
                     {
                         double[] phys = _perPlanPhysicalSlices[p][z];
                         if (phys == null) continue;
                         double d = phys[i];
                         if (d <= 0) continue;
                         var (eq, el, weight, useEqd2) = factors[p];
-                        double eqd2 = useEqd2 ? (d * d * eq + d * el) : d;
-                        eqd2Sum += eqd2 * weight;
+                        double converted = useEqd2 ? (d * d * eq + d * el) : d;
+                        sum += converted * weight;
                     }
-                    eqd2Slice[i] = eqd2Sum;
+                    doseSlice[i] = sum;
                 }
-                eqd2Slices[z] = eqd2Slice;
+                doseSlices[z] = doseSlice;
             }
 
-            return DVHCalculator.BinToHistogram(eqd2Slices, masks, maxDoseGy);
+            var curve = DVHCalculator.ComputeCumulative(
+                doseSlices, masks, DomainConstants.DvhSamplingResolution, out var statistics);
+            return new StructureDvhResult(structureId, curve, statistics);
         }
 
         private double ComputeReferenceDose(SummationConfig config, double alphaBeta)
@@ -486,14 +508,6 @@ namespace EQD2Viewer.Services
             }
         }
 
-        public bool[]? GetStructureMask(string structureId, int sliceIndex)
-        {
-            if (_structureMasks == null || string.IsNullOrEmpty(structureId)) return null;
-            if (!_structureMasks.TryGetValue(structureId, out var masks)) return null;
-            if (sliceIndex < 0 || sliceIndex >= masks.Length) return null;
-            return masks[sliceIndex];
-        }
-
         public IReadOnlyList<string> GetCachedStructureIds()
         {
             return _cachedStructureIds ?? (IReadOnlyList<string>)new string[0];
@@ -605,41 +619,56 @@ namespace EQD2Viewer.Services
             double imgOx = _referenceCtImage.Origin.X, imgOy = _referenceCtImage.Origin.Y, imgOz = _referenceCtImage.Origin.Z;
             double xDirX = _referenceCtImage.XDirection.X, xDirY = _referenceCtImage.XDirection.Y, xDirZ = _referenceCtImage.XDirection.Z;
             double yDirX = _referenceCtImage.YDirection.X, yDirY = _referenceCtImage.YDirection.Y, yDirZ = _referenceCtImage.YDirection.Z;
-            double xRes = _referenceCtImage.XRes, yRes = _referenceCtImage.YRes;
+            double zDirX = _referenceCtImage.ZDirection.X, zDirY = _referenceCtImage.ZDirection.Y, zDirZ = _referenceCtImage.ZDirection.Z;
+            double xRes = _referenceCtImage.XRes, yRes = _referenceCtImage.YRes, zRes = _referenceCtImage.ZRes;
 
             foreach (var structure in structures)
             {
                 if (structure.IsEmpty) continue;
                 try
                 {
-                    bool[][] sliceMasks = new bool[_refZ][];
-                    bool hasAnyContour = false;
-                    for (int z = 0; z < _refZ; z++)
+                    // Contours are keyed by the slice index of the image the structure set was
+                    // drawn on. That image is not necessarily this reference CT (same frame of
+                    // reference, other series: a 4D phase, a contrast scan, a cropped copy), so the
+                    // key cannot be trusted as a slice index here. Every contour point carries its
+                    // world z, so the target slice is derived from it against this CT's geometry —
+                    // the same way x and y already are.
+                    var polygonsBySlice = new Dictionary<int, List<bool[]>>();
+                    foreach (var kv in structure.ContoursBySlice)
                     {
-                        if (!structure.ContoursBySlice.TryGetValue(z, out var contourList) || contourList == null || contourList.Count == 0)
-                        { sliceMasks[z] = null!; continue; }
-                        hasAnyContour = true;
-                        var masks = new List<bool[]>();
+                        var contourList = kv.Value;
+                        if (contourList == null) continue;
                         foreach (var contour in contourList)
                         {
-                            if (contour.Length < 3) continue;
+                            if (contour == null || contour.Length < 3) continue;
+
+                            double dx0 = contour[0][0] - imgOx, dy0 = contour[0][1] - imgOy, dz0 = contour[0][2] - imgOz;
+                            double fz = (dx0 * zDirX + dy0 * zDirY + dz0 * zDirZ) / zRes;
+                            if (double.IsNaN(fz)) continue;
+                            int z = (int)Math.Round(fz);
+                            if (z < 0 || z >= _refZ) continue;   // contour lies outside this CT's extent
+
                             var pixelPoints = new Point2D[contour.Length];
                             for (int i = 0; i < contour.Length; i++)
                             {
                                 double dx = contour[i][0] - imgOx, dy = contour[i][1] - imgOy, dz = contour[i][2] - imgOz;
                                 pixelPoints[i] = new Point2D(
-                                       (dx * xDirX + dy * xDirY + dz * xDirZ) / xRes,
-                                 (dx * yDirX + dy * yDirY + dz * yDirZ) / yRes);
+                                    (dx * xDirX + dy * xDirY + dz * xDirZ) / xRes,
+                                    (dx * yDirX + dy * yDirY + dz * yDirZ) / yRes);
                             }
+                            if (!polygonsBySlice.TryGetValue(z, out var masks))
+                                polygonsBySlice[z] = masks = new List<bool[]>();
                             masks.Add(StructureRasterizer.RasterizePolygon(pixelPoints, _refW, _refH));
                         }
-                        sliceMasks[z] = StructureRasterizer.CombineContourMasks(masks, _refW, _refH);
                     }
-                    if (hasAnyContour)
-                    {
-                        _structureMasks[structure.Id] = sliceMasks;
-                        _cachedStructureIds.Add(structure.Id);
-                    }
+                    if (polygonsBySlice.Count == 0) continue;
+
+                    bool[][] sliceMasks = new bool[_refZ][];
+                    foreach (var kv in polygonsBySlice)
+                        sliceMasks[kv.Key] = StructureRasterizer.CombineContourMasks(kv.Value, _refW, _refH);
+
+                    _structureMasks[structure.Id] = sliceMasks;
+                    _cachedStructureIds.Add(structure.Id);
                 }
                 catch (Exception ex) { SimpleLogger.Warning($"Could not rasterize structure '{structure.Id}': {ex.Message}"); }
             }

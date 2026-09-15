@@ -56,18 +56,9 @@ namespace EQD2Viewer.App.UI.ViewModels
             }
 
             if (_doseOverlay.IsEQD2Enabled) RecalculateAllDVH();
+            // Newly selected structures get their Σ row/curve too when a summation is active.
+            RefreshSummationDVHIfActive();
             ShowStructureContours = true;
-            RefreshPlot();
-            RequestRender();
-        }
-
-        public void ClearDVH()
-        {
-            _dvhCache.Clear();
-            _visibleStructureIds.Clear();
-            StructureSettings.Clear();
-            PlotModel.Series.Clear();
-            SummaryData.Clear();
             RefreshPlot();
             RequestRender();
         }
@@ -76,7 +67,7 @@ namespace EQD2Viewer.App.UI.ViewModels
         {
             var oldSeries = PlotModel.Series.Where(s => (s.Tag as string)?.StartsWith("EQD2_") ?? false).ToList();
             foreach (var s in oldSeries) PlotModel.Series.Remove(s);
-            var oldSummaries = SummaryData.Where(s => s.Type == "EQD2").ToList();
+            var oldSummaries = SummaryData.Where(s => s.Type == "EQD2" && !s.IsSummation).ToList();
             foreach (var s in oldSummaries) SummaryData.Remove(s);
 
             if (!_doseOverlay.IsEQD2Enabled) { RefreshPlot(); return; }
@@ -87,7 +78,7 @@ namespace EQD2Viewer.App.UI.ViewModels
                 double alphaBeta = setting?.AlphaBeta ?? 3.0;
 
                 SummaryData.Add(_dvhService.BuildEQD2SummaryFromCurve(
-                    entry.DvhCurve, entry.PlanId, _doseOverlay.NumberOfFractions, alphaBeta, _meanMethod));
+                    entry.DvhCurve, entry.PlanId, _doseOverlay.NumberOfFractions, alphaBeta));
 
                 DoseVolumePoint[]? curveInGy = null;
                 if (entry.DvhCurve.Curve != null)
@@ -116,8 +107,11 @@ namespace EQD2Viewer.App.UI.ViewModels
 
         private void OnStructureSettingChanged(object sender, PropertyChangedEventArgs e)
         {
-            if (e.PropertyName == nameof(StructureAlphaBetaItem.AlphaBeta) && _doseOverlay.IsEQD2Enabled)
-                RecalculateAllDVH();
+            if (e.PropertyName != nameof(StructureAlphaBetaItem.AlphaBeta)) return;
+            if (_doseOverlay.IsEQD2Enabled) RecalculateAllDVH();
+            // The Σ row is computed at the structure's α/β, so it must follow the edit as well —
+            // otherwise the table keeps showing a sum for the previous α/β.
+            RefreshSummationDVHIfActive();
         }
 
         internal void UpdatePlotVisibility()
@@ -126,7 +120,8 @@ namespace EQD2Viewer.App.UI.ViewModels
                 if (series.Tag is string tag)
                     series.IsVisible = (tag.StartsWith("Physical_") && _showPhysicalDVH) ||
                                        (tag.StartsWith("EQD2_") && _showEQD2DVH) ||
-                                       tag.StartsWith("Summation_");
+                                       tag.StartsWith("Summation_") ||
+                                       (tag.StartsWith("SummationPlan_") && _showPerPlanSummationDVH);
             PlotModel.InvalidatePlot(true);
         }
 

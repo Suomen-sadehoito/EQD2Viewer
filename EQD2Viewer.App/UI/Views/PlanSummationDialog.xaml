@@ -66,7 +66,7 @@
                         <Run FontWeight="SemiBold">Include</Run><Run Text=" — select plans  |  "/>
                         <Run FontWeight="SemiBold">Ref</Run><Run Text=" — reference CT grid  |  "/>
                         <Run FontWeight="SemiBold">Fx</Run><Run Text=" — fractions  |  "/>
-                        <Run FontWeight="SemiBold">Wt</Run><Run Text=" — weight  |  "/>
+                        <Run FontWeight="SemiBold">Wt</Run><Run Text=" — fraction of course delivered (scales EQD2)  |  "/>
                         <Run FontWeight="SemiBold">Registration</Run><Run Text=" — spatial mapping"/>
                     </TextBlock>
                 </Border>
@@ -108,7 +108,12 @@
                             <DataGridTextColumn.EditingElementStyle><Style TargetType="TextBox"><Setter Property="Background" Value="#222830"/><Setter Property="Foreground" Value="#F0F2F5"/></Style></DataGridTextColumn.EditingElementStyle>
                         </DataGridTextColumn>
                         <DataGridTextColumn Header="Wt" Width="38" Binding="{Binding Weight, StringFormat=F1, UpdateSourceTrigger=PropertyChanged}">
-                            <DataGridTextColumn.ElementStyle><Style TargetType="TextBlock"><Setter Property="Foreground" Value="#F0F2F5"/></Style></DataGridTextColumn.ElementStyle>
+                            <DataGridTextColumn.HeaderStyle>
+                                <Style TargetType="DataGridColumnHeader" BasedOn="{StaticResource {x:Type DataGridColumnHeader}}">
+                                    <Setter Property="ToolTip" Value="Weight scales the plan's contribution AFTER EQD2 conversion — i.e. the fraction of the course delivered (dose per fraction unchanged). Wt 0.5 on a 20 Gy / 1 fx plan gives 0.5 × EQD2(20 Gy), not EQD2(10 Gy)."/>
+                                </Style>
+                            </DataGridTextColumn.HeaderStyle>
+                            <DataGridTextColumn.ElementStyle><Style TargetType="TextBlock"><Setter Property="Foreground" Value="#F0F2F5"/><Setter Property="ToolTip" Value="Fraction of this course to include: the EQD2 contribution is multiplied by this after conversion (dose per fraction unchanged)."/></Style></DataGridTextColumn.ElementStyle>
                             <DataGridTextColumn.EditingElementStyle><Style TargetType="TextBox"><Setter Property="Background" Value="#222830"/><Setter Property="Foreground" Value="#F0F2F5"/></Style></DataGridTextColumn.EditingElementStyle>
                         </DataGridTextColumn>
                         <DataGridTemplateColumn Header="Registration" Width="*" MinWidth="170">
@@ -141,13 +146,15 @@
                 <StackPanel>
                     <TextBlock Foreground="#5C6475" FontSize="10" FontWeight="SemiBold" Margin="0,0,0,4">HOW IT WORKS</TextBlock>
                     <TextBlock Foreground="#9BA3B0" FontSize="10.5" TextWrapping="Wrap" LineHeight="16">
-                        Each plan's dose is converted to EQD2 voxel-by-voxel, mapped via registration, and summed.
-                        DVH is automatically calculated for structures in the reference plan's structure set.
+                        Each plan's dose is resampled onto the open CT, converted to EQD2 voxel-by-voxel with that plan's
+                        own fractionation, scaled by Wt, and summed. DVHs are computed for the structures of the reference
+                        plan's structure set. A single plan gives a voxel-based DVH to compare with the Eclipse DVH of the
+                        same plan; expect small differences by design (CT-grid rasterisation, interpolated dose).
                     </TextBlock>
                 </StackPanel>
                 <Border Grid.Column="1" Background="#1A1E26" CornerRadius="4" Padding="12,8" Margin="12,0,0,0" VerticalAlignment="Center">
                     <TextBlock Foreground="#4CAF6E" FontSize="10.5" FontFamily="Consolas" TextAlignment="Center">
-                        EQD2 = Σᵢ Dᵢ·(dᵢ + α/β)/(2 + α/β)
+                        EQD2 = Σᵢ wᵢ·Dᵢ·(dᵢ + α/β)/(2 + α/β)
                     </TextBlock>
                 </Border>
             </Grid>

@@ -216,7 +216,7 @@ namespace EQD2Viewer.Tests.Models
         public void DvhResolution_ShouldBePositive()
         {
             DomainConstants.DvhSamplingResolution.Should().BeGreaterThan(0);
-            DomainConstants.DvhHistogramBins.Should().BeGreaterThan(100);
+            DomainConstants.DvhMaxHistogramBins.Should().BeGreaterThan(1000);
         }
 
         [Fact]
