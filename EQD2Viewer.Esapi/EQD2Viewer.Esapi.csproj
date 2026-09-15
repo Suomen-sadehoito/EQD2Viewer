@@ -93,14 +93,16 @@
     <PackageReference Include="Costura.Fody" Version="6.0.0">
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
-    <PackageReference Include="Fody" Version="6.8.2">
+    <PackageReference Include="Fody" Version="6.9.3">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
-    <!-- Pin System.Memory to the newer assembly version shipped with System.Text.Json 10.0.5.
-         Otherwise Esapi's older transitive System.Memory (4.0.2.0) overwrites the shared
-         BuildOutput\$(Configuration)\ directory and breaks the Tests project at runtime. -->
-    <PackageReference Include="System.Memory" Version="4.6.0" />
+    <!-- Pin System.Memory to the version the SDK-style projects resolve (System.Text.Json 10.0.5
+         needs >= 4.6.0, CommunityToolkit.Mvvm 8.4.2 needs >= 4.6.3). Otherwise Esapi's older
+         transitive System.Memory overwrites the shared BuildOutput\$(Configuration)\ directory
+         and breaks the Tests project at runtime. Keep this equal to what App/Tests resolve
+         (check obj\project.assets.json) whenever a package bump raises the requirement. -->
+    <PackageReference Include="System.Memory" Version="4.6.3" />
   </ItemGroup>
   <!-- Project references: Core + main WPF project (ESAPI-free) -->
   <ItemGroup>
